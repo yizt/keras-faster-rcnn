@@ -335,13 +335,8 @@ class DetectionTargetLayer(KE.Layer):
         return [
             (None, self.config.TRAIN_ROIS_PER_IMAGE, 4),  # rois
             (None, 1),  # class_ids
-            (None, self.config.TRAIN_ROIS_PER_IMAGE, 4),  # deltas
-            (None, self.config.TRAIN_ROIS_PER_IMAGE, self.config.MASK_SHAPE[0],
-             self.config.MASK_SHAPE[1])  # masks
+            (None, self.config.TRAIN_ROIS_PER_IMAGE, 4)  # deltas
         ]
-
-    def compute_mask(self, inputs, mask=None):
-        return [None, None, None, None]
 
 
 def refine_detections_graph(rois, probs, deltas, config):
