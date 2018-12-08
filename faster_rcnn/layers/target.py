@@ -9,6 +9,7 @@ Created on 2018/12/2 下午3:43
 """
 import keras
 import tensorflow as tf
+from faster_rcnn.utils import tf_utils
 
 
 def compute_iou(gt_boxes, anchors):
@@ -71,18 +72,19 @@ def regress_target(anchors, gt_boxes):
     return target
 
 
-def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors):
+def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     """
     处理单个图像的rpn分类和回归目标
     :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=-1 为padding
     :param gt_cls: GT 类别 [MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=-1 为padding
     :param anchors: [anchor_num,(y1,x1,y2,x2)]
-    :param max_rpn_train_anchors: 训练样本数(256)
+    :param rpn_train_anchors: 训练样本数(256)
     :return:
     class_ids:[rpn_train_anchors,num_class]: anchor边框分类
     deltas:[rpn_train_anchors,(dy,dx,dh,dw)]：anchor边框回归目标
     indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为负样本，tag=-1为padding
     """
+
     gt_indices = tf.where(tf.equal(gt_cls[:, -1], 1))
     # 获取真正的GT,去除标签位
     gt_boxes = tf.gather_nd(gt_boxes, gt_indices)[:, :-1]
@@ -112,9 +114,9 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors):
 
     # 负样本
     negative_num = tf.minimum(rpn_train_anchors - positive_num,
-                             tf.shape(positive_indices)[0])
+                              tf.shape(positive_indices)[0])
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
-    #negative_anchors = tf.gather_nd(anchors, negative_indices)
+    # negative_anchors = tf.gather_nd(anchors, negative_indices)
 
     # 找到正样本对应的GT boxes
     anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引
@@ -148,19 +150,24 @@ class RpnTarget(keras.layers.Layer):
         """
         计算分类和回归目标
         :param inputs:
-        inputs[0]: GT 边框坐标 [batch_num,MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=0 为padding
-        inputs[1]: GT 类别 [batch_num,MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=0 为padding
+        inputs[0]: GT 边框坐标 [batch_num,MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=-1 为padding
+        inputs[1]: GT 类别 [batch_num,MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=-1 为padding
         inputs[2]: Anchors [batch_num,anchor_num,(y1,x1,y2,x2)]
         :param kwargs:
         :return:
         """
         gt_boxes = inputs[0]
-        gt_cls = inputs[1]
+        gt_cls_ids = inputs[1]
         anchors = inputs[2]
 
-        gt_indices = tf.where()
+        outputs = tf_utils.batch_slice(
+            [gt_boxes, gt_cls_ids, anchors],
+            lambda x, y, z: rpn_targets_graph(x, y, z, 256), 2)
 
-        pass
+        return outputs
 
     def compute_output_shape(self, input_shape):
-        pass
+        return [(None, 256, 2),  # 只有两类
+                (None, 256, 4),
+                (None, 256, 2)
+                ]
