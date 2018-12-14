@@ -13,7 +13,7 @@ import datetime
 import re
 import math
 import logging
-from . import utils
+from faster_rcnn.utils import tf_utils
 
 
 ############################################################
@@ -222,7 +222,7 @@ def load_image_gt(dataset, config, image_id):
     image = dataset.load_image(image_id)
     image_info = dataset.image_info[image_id]
     original_shape = image.shape
-    image, window, scale, padding, crop = utils.resize_image(
+    image, window, scale, padding, crop = tf_utils.resize_image(
         image,
         min_dim=config.IMAGE_MIN_DIM,
         min_scale=config.IMAGE_MIN_SCALE,
@@ -237,8 +237,24 @@ def load_image_gt(dataset, config, image_id):
     # Image meta data
     image_meta = compose_image_meta(image_id, original_shape, image.shape,
                                     window, scale)
+    # 调整标注的边框
+    bbox = adjust_box(bbox, padding, scale)
 
     return image, image_meta, class_ids, bbox
+
+
+def adjust_box(boxes, padding, scale):
+    """
+    根据填充和缩放因子，调整boxes的值
+    :param boxes: [N,(y1,x1,y2,x2)]
+    :param padding: [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
+    :param scale: 缩放因子
+    :return:
+    """
+    boxes = boxes * scale
+    boxes[:, 0::2] = boxes[:, 0::2] + padding[0][0]  # 高度padding
+    boxes[:, 1::2] = boxes[:, 1::2] + padding[1][0]  # 宽度padding
+    return boxes
 
 
 def extract_classids_and_bboxes(boxes_info):
