@@ -41,10 +41,15 @@ def generator(all_image_info, batch_size):
 
 
 if __name__ == '__main__':
+    from tensorflow.python import debug as tf_debug
+    import keras.backend as K
+    sess = K.get_session()
+    sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    K.set_session(sess)
     voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
     all_img_info, classes_count, class_mapping = get_voc_data(voc_path)
     m = rpn_net((224, 224, 3), 50)
     compile(m, config, 0.01, 0.9)
-    m.fit_generator(generator(all_img_info, 32),
+    m.fit_generator(generator(all_img_info, 4),
                     epochs=3,
-                    steps_per_epoch=len(all_img_info) // 32)
+                    steps_per_epoch=len(all_img_info) // 4)

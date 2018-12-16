@@ -85,14 +85,14 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为负样本，tag=-1为padding
     """
 
-    gt_indices = tf.where(tf.equal(gt_cls[:, -1], 1))
+    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], -1))
     # 获取真正的GT,去除标签位
     gt_boxes = tf.gather_nd(gt_boxes, gt_indices)[:, :-1]
     gt_cls = tf.gather_nd(gt_cls, gt_indices)[:, :-1]
 
     # 计算IoU
     iou = compute_iou(gt_boxes, anchors)
-    #print("iou:{}".format(iou))
+    print("iou:{}".format(iou))
 
     # If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
     # If an anchor overlaps a GT box with IoU < 0.3 then it's negative.
@@ -172,3 +172,11 @@ class RpnTarget(keras.layers.Layer):
                 (None, 256, 4),
                 (None, 256, 2)
                 ]
+
+
+if __name__ == '__main__':
+    sess = tf.Session()
+    a = tf.constant([[1, 2, 4, 6], [1, 2, 4, 6], [2, 2, 4, 6]], dtype=tf.float32)
+    b = tf.constant([[2, 2, 4, 6], [2, 3, 4, 6]], dtype=tf.float32)
+    iou = compute_iou(a, b)
+    print(sess.run(iou))
