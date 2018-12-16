@@ -228,7 +228,6 @@ class Config(object):
 
 
 class VOCConfig(Config):
-
     # Give the configuration a recognizable name
     NAME = "voc"
 
@@ -245,3 +244,6 @@ class VOCConfig(Config):
     # Number of classes (including background)
     NUM_CLASSES = 1 + 20  # voc has 20 classes
 
+
+# 当前配置
+current_config = VOCConfig()

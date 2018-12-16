@@ -46,7 +46,7 @@ def smooth_l1_loss(y_true, y_predict):
     :param y_predict:[N,4]
     :return:
     """
-    abs_diff = tf.abs(y_true, y_predict)
+    abs_diff = tf.abs(y_true - y_predict)
     loss = tf.where(abs_diff < 1, 0.5 * tf.pow(abs_diff, 2), abs_diff - 0.5)
     return tf.reduce_sum(loss, axis=1)
 

@@ -4,11 +4,12 @@ Created on 2018/12/1 下午3:03
 
 @author: mick.yi
 
+voc数据集
+
 """
 from six import raise_from
 import os
-import numpy as np
-from .input import Dataset
+from faster_rcnn.preprocess.input import Dataset
 
 try:
     import xml.etree.cElementTree as ET
@@ -151,3 +152,8 @@ class PascalVoc(Dataset):
                 width=img_info["width"],
                 height=img_info["height"],
                 annotations=img_info['bboxes'])
+
+
+if __name__ == '__main__':
+    voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
+    get_voc_data(voc_path)

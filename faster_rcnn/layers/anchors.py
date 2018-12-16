@@ -41,9 +41,11 @@ def shift(shape, strides, base_anchors):
     :param base_anchors:所有的基准anchors，(anchor_num,4)
     :return:
     """
-    H, W = shape
-    ctr_x = (tf.range(W, dtype=tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
-    ctr_y = (tf.range(H, dtype=tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
+    H = shape[0]
+    W = shape[1]
+    print("shape:{}".format(shape))
+    ctr_x = (tf.cast(tf.range(H), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
+    ctr_y = (tf.cast(tf.range(W), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
 
     ctr_x, ctr_y = tf.meshgrid(ctr_x, ctr_y)
 
@@ -62,7 +64,7 @@ def shift(shape, strides, base_anchors):
 
 
 class Anchor(keras.layers.Layer):
-    def __init__(self, base_size, strides, ratios, scales):
+    def __init__(self, base_size, ratios, scales, strides, **kwargs):
         """
 
         :param base_size: anchor的base_size,如：64
@@ -70,12 +72,14 @@ class Anchor(keras.layers.Layer):
         :param ratios: 长宽比
         :param scales: 缩放比
         """
+        super(Anchor, self).__init__(**kwargs)
         self.base_size = base_size
         self.strides = strides
         self.ratios = ratios
         self.scales = scales
         # base anchors数量
         self.num_anchors = len(ratios) * len(scales)
+        self.name = 'anchors'
 
     def call(self, inputs, **kwargs):
         """
@@ -86,9 +90,10 @@ class Anchor(keras.layers.Layer):
         """
         features = inputs
         features_shape = tf.shape(features)
+        print("feature_shape:{}".format(features_shape))
 
         base_anchors = generate_anchors(self.base_size, self.ratios, self.scales)
-        anchors = shift(features_shape[1:3], base_anchors)
+        anchors = shift(features_shape[1:3], self.strides, base_anchors)
         # 扩展第一维，batch_num;每个样本都有相同的anchors
         return tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
 

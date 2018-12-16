@@ -6,8 +6,8 @@ Created on 2018/11/13 9:57
 
 """
 import numpy as np
-from faster_rcnn.pascal_voc import PascalVoc, get_voc_data
-from faster_rcnn.input import load_image_gt, parse_image_meta
+from faster_rcnn.preprocess.pascal_voc import PascalVoc, get_voc_data
+from faster_rcnn.preprocess.input import load_image_gt, parse_image_meta
 from faster_rcnn.config import VOCConfig
 import tensorflow as tf
 
@@ -47,3 +47,4 @@ if __name__ == '__main__':
     print(sess.run(y[0]))
     print(sess.run(x))
     print(sess.run(tf.stack([tf.ones([0]), tf.ones([0])], axis=1)))
+

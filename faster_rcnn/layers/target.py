@@ -23,11 +23,11 @@ def compute_iou(gt_boxes, anchors):
     anchors = tf.expand_dims(anchors, axis=0)  # [1,M,4]
     # 交集
     intersect_w = tf.maximum(0.0,
-                             tf.min(gt_boxes[:, :, 3], anchors[:, :, 3]) -
-                             tf.max(gt_boxes[:, :, 1], anchors[:, :, 1]))
+                             tf.minimum(gt_boxes[:, :, 3], anchors[:, :, 3]) -
+                             tf.maximum(gt_boxes[:, :, 1], anchors[:, :, 1]))
     intersect_h = tf.maximum(0.0,
-                             tf.min(gt_boxes[:, :, 2], anchors[:, :, 2]) -
-                             tf.max(gt_boxes[:, :, 0], anchors[:, :, 0]))
+                             tf.minimum(gt_boxes[:, :, 2], anchors[:, :, 2]) -
+                             tf.maximum(gt_boxes[:, :, 0], anchors[:, :, 0]))
     intersect = intersect_h * intersect_w
 
     # 计算面积
@@ -92,13 +92,14 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
 
     # 计算IoU
     iou = compute_iou(gt_boxes, anchors)
+    #print("iou:{}".format(iou))
 
     # If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
     # If an anchor overlaps a GT box with IoU < 0.3 then it's negative.
     # Neutral anchors are those that don't match the conditions above,
 
     # 每个anchors最大iou
-    anchors_iou_max = tf.argmax(iou, axis=0)
+    anchors_iou_max = tf.reduce_max(iou, axis=0)
 
     # 正样本索引号（iou>0.7),[[0],[2]]转为[0,2]
     positive_indices = tf.where(anchors_iou_max > 0.7)[:, 0]
@@ -134,17 +135,17 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     deltas = tf.pad(deltas, [[0, negative_num + pad_num], [0, 0]])
 
     # 处理索引,记录正负anchor索引位置，第二位为标志位1位前景、0为背景、-1位padding
-    positive_part = tf.stack(positive_indices, tf.ones([positive_num]), axis=1)
-    negative_part = tf.stack(negative_indices, tf.zeros([negative_num]), axis=1)
-    pad_part = tf.ones([pad_num, 2]) * -1
+    positive_part = tf.stack([positive_indices, tf.ones([positive_num], dtype=tf.int64)], axis=1)
+    negative_part = tf.stack([negative_indices, tf.zeros([negative_num], dtype=tf.int64)], axis=1)
+    pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
     indices = tf.concat([positive_part, negative_part, pad_part], axis=0)
 
     return class_ids, deltas, indices
 
 
 class RpnTarget(keras.layers.Layer):
-    def __init__(self):
-        pass
+    def __init__(self, **kwargs):
+        super(RpnTarget, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
         """
