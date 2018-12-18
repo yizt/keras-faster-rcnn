@@ -231,7 +231,7 @@ class VOCConfig(Config):
     # Give the configuration a recognizable name
     NAME = "voc"
 
-    IMAGE_MIN_DIM = 192
+    IMAGE_MIN_DIM = 224
     IMAGE_MAX_DIM = 224
 
     # We use a GPU with 12GB memory, which can fit two images.
@@ -243,6 +243,9 @@ class VOCConfig(Config):
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 20  # voc has 20 classes
+
+    weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+
 
 
 # 当前配置

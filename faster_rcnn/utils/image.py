@@ -8,6 +8,8 @@ Created on 2018/12/15 下午5:42
 
 """
 import skimage
+from skimage import io
+
 import numpy as np
 import faster_rcnn.utils.tf_utils as tf_utils
 
@@ -21,7 +23,7 @@ def load_image(image_path):
     """Load the specified image and return a [H,W,3] Numpy array.
     """
     # Load image
-    image = skimage.io.imread(image_path)
+    image = io.imread(image_path)
     # If grayscale. Convert to RGB for consistency.
     if image.ndim != 3:
         image = skimage.color.gray2rgb(image)

@@ -36,15 +36,18 @@ def voc_test():
 
 
 if __name__ == '__main__':
-    sess = tf.Session()
+    # sess = tf.Session()
+    #
+    # x = tf.ones([10])
+    # y = tf.nn.top_k(tf.Variable([1, 3, 7, 4]) * -1, 4, sorted=False)
+    # x = tf.sparse_to_dense(y[0] * -1, [10], 1)
+    #
+    # sess.run(tf.global_variables_initializer())
+    #
+    # print(sess.run(y[0]))
+    # print(sess.run(x))
+    # print(sess.run(tf.stack([tf.ones([0]), tf.ones([0])], axis=1)))
 
-    x = tf.ones([10])
-    y = tf.nn.top_k(tf.Variable([1, 3, 7, 4]) * -1, 4, sorted=False)
-    x = tf.sparse_to_dense(y[0] * -1, [10], 1)
-
-    sess.run(tf.global_variables_initializer())
-
-    print(sess.run(y[0]))
-    print(sess.run(x))
-    print(sess.run(tf.stack([tf.ones([0]), tf.ones([0])], axis=1)))
+    import os
+    print(os.listdir('d:\work\图像识别\VOCtrainval_06-Nov-2007'))
 

@@ -38,8 +38,7 @@ def rpn_net(image_shape, max_gt_num):
         [boxes_regress, target[1], target[2]])
 
     return Model(inputs=[input_image, input_class_ids, input_bboxes],
-                 outputs=[
-                     cls_loss, regress_loss])
+                 outputs=[cls_loss, regress_loss])
 
 
 def compile(keras_model, config, learning_rate, momentum):
@@ -55,7 +54,7 @@ def compile(keras_model, config, learning_rate, momentum):
     keras_model._losses = []
     keras_model._per_input_losses = {}
     loss_names = [
-        "rpn_class_loss", "rpn_bbox_loss"]
+        "rpn_class_loss"]  # , "rpn_bbox_loss"
     for name in loss_names:
         layer = keras_model.get_layer(name)
         if layer.output in keras_model.losses:

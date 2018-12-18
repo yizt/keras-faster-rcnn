@@ -18,7 +18,7 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     :return:
     """
     # 正负样本索引号
-    train_indices = tf.where(tf.not_equal(indices[:, :, -1], 1))
+    train_indices = tf.where(tf.not_equal(indices[:, :, -1], -1))
     train_anchors = tf.gather_nd(indices, train_indices)  # (train_num,(idx,tag))
     # batch索引
     batch_indices = train_indices[:, 0]  # 训练的第一维是batch索引
@@ -30,8 +30,10 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     predict_cls_ids = tf.gather_nd(predict_cls_ids, train_indices_2d)  # (train_num,2)
 
     # 真实的类别，打平前两维，batch和anchors打平
-    shape = tf.shape(true_cls_ids)
-    true_cls_ids = tf.reshape(true_cls_ids, [tf.reduce_prod(shape[:2]), shape[2]])
+    # shape = tf.shape(true_cls_ids)
+    # true_cls_ids = tf.reshape(true_cls_ids, [tf.reduce_prod(shape[:2]), shape[2]])
+    true_cls_ids_padding = tf.reduce_all(tf.equal(true_cls_ids, 0), axis=-1)
+    true_cls_ids = tf.boolean_mask(true_cls_ids, tf.logical_not(true_cls_ids_padding))
 
     # 交叉熵损失函数
     losses = tf.nn.softmax_cross_entropy_with_logits_v2(
@@ -54,13 +56,14 @@ def smooth_l1_loss(y_true, y_predict):
 def rpn_regress_loss(predict_deltas, deltas, indices):
     """
 
-    :param predict_deltas: 预测的回归目标，(batch_num,anchors_num,4)
-    :param deltas: 真实的回归目标，(batch_num,rpn_train_anchors,4)
-    :param indices: 正负样本索引，(batch_num,rpn_train_anchors,(idx,tag))，
+    :param predict_deltas: 预测的回归目标，(batch_num, anchors_num, 4)
+    :param deltas: 真实的回归目标，(batch_num, rpn_train_anchors, 4)
+    :param indices: 正负样本索引，(batch_num, rpn_train_anchors, (idx,tag))，
              idx:指定anchor索引位置，tag 1：正样本，0：负样本，-1 padding
     :return:
     """
     train_postive_indices = tf.where(tf.equal(indices[:, :, -1], 1))
+
     # 只有正样本做回归
     train_anchors = tf.gather_nd(indices, train_postive_indices)  # (positive_num,(idx,tag))
     # batch索引
@@ -71,9 +74,12 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     train_indices_2d = tf.stack([batch_indices, true_postive_indices], axis=1)
     # 正样本anchor预测的回归类型
     predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d)
-    # 真实回归目标,打平前两维
-    shape = tf.shape(deltas)
-    deltas = tf.reshape(deltas, [tf.reduce_prod(shape[:2]), shape[-1]])
+    # 真实回归目标,去除padding,打平前两维
+    deltas_padding = tf.reduce_all(tf.equal(deltas, 0), axis=-1)  # 最后一维全为0，是padding
+    deltas = tf.boolean_mask(deltas, tf.logical_not(deltas_padding))
+    #
+    # shape = tf.shape(deltas)
+    # deltas = tf.reshape(deltas, [tf.reduce_prod(shape[:2]), shape[-1]])
 
     # Smooth-L1
     return smooth_l1_loss(deltas, predict_deltas)

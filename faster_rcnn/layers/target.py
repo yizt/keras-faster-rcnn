@@ -69,15 +69,17 @@ def regress_target(anchors, gt_boxes):
     dw = tf.log(gt_w / w)
 
     target = tf.stack([dy, dx, dh, dw], axis=1)
+    target /= tf.constant([0.1, 0.1, 0.2, 0.2])
+    # target = tf.where(tf.greater(target, 100.0), 100.0, target)
     return target
 
 
 def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     """
     处理单个图像的rpn分类和回归目标
-    :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=-1 为padding
-    :param gt_cls: GT 类别 [MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=-1 为padding
-    :param anchors: [anchor_num,(y1,x1,y2,x2)]
+    :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=-1 为padding
+    :param gt_cls: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=-1 为padding
+    :param anchors: [anchor_num, (y1,x1,y2,x2)]
     :param rpn_train_anchors: 训练样本数(256)
     :return:
     class_ids:[rpn_train_anchors,num_class]: anchor边框分类
@@ -92,7 +94,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
 
     # 计算IoU
     iou = compute_iou(gt_boxes, anchors)
-    print("iou:{}".format(iou))
+    # print("iou:{}".format(iou))
 
     # If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
     # If an anchor overlaps a GT box with IoU < 0.3 then it's negative.
@@ -102,10 +104,10 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     anchors_iou_max = tf.reduce_max(iou, axis=0)
 
     # 正样本索引号（iou>0.7),[[0],[2]]转为[0,2]
-    positive_indices = tf.where(anchors_iou_max > 0.7)[:, 0]
+    positive_indices = tf.where(anchors_iou_max > 0.7)  # [:, 0]
 
     # 负样本索引号
-    negative_indices = tf.where(anchors_iou_max < 0.3)[:, 0]
+    negative_indices = tf.where(anchors_iou_max < 0.3)  # [:, 0]
 
     # 正样本
     positive_num = int(rpn_train_anchors * 0.5)  # 正负比例1:1
@@ -120,23 +122,28 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     # negative_anchors = tf.gather_nd(anchors, negative_indices)
 
     # 找到正样本对应的GT boxes
-    anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引
+    anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
     positive_gt_indices = tf.gather_nd(anchors_iou_argmax, positive_indices)
-    positive_gt_boxes = tf.gather_nd(gt_boxes, positive_gt_indices)
-    positive_gi_cls = tf.gather_nd(gt_cls, positive_gt_indices)
+    # gt_cls，gt_boxes是二维的，使用gather
+    positive_gt_boxes = tf.gather(gt_boxes, positive_gt_indices)
+    positive_gt_cls = tf.gather(gt_cls, positive_gt_indices)
 
     # 回归目标
     deltas = regress_target(positive_anchors, positive_gt_boxes)
 
     # 计算padding
     pad_num = tf.maximum(0, rpn_train_anchors - positive_num - negative_num)
+    # 分类正负样本
+    negative_gt_cls = tf.stack([tf.ones([negative_num]),
+                                tf.zeros([negative_num])], axis=1)  # 负样本稀疏编码[1,0]
+    class_ids = tf.concat([positive_gt_cls, negative_gt_cls], axis=0)
+    class_ids = tf.pad(class_ids, [[0, pad_num], [0, 0]])  # padding
 
-    class_ids = tf.pad(positive_gi_cls, [[0, negative_num + pad_num], [0, 0]])
     deltas = tf.pad(deltas, [[0, negative_num + pad_num], [0, 0]])
 
     # 处理索引,记录正负anchor索引位置，第二位为标志位1位前景、0为背景、-1位padding
-    positive_part = tf.stack([positive_indices, tf.ones([positive_num], dtype=tf.int64)], axis=1)
-    negative_part = tf.stack([negative_indices, tf.zeros([negative_num], dtype=tf.int64)], axis=1)
+    positive_part = tf.stack([positive_indices[:, 0], tf.ones([positive_num], dtype=tf.int64)], axis=1)
+    negative_part = tf.stack([negative_indices[:, 0], tf.zeros([negative_num], dtype=tf.int64)], axis=1)
     pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
     indices = tf.concat([positive_part, negative_part, pad_part], axis=0)
 
