@@ -87,10 +87,10 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为负样本，tag=-1为padding
     """
 
-    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], -1))
+    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], -1), name='rpn_target_gt_indices')
     # 获取真正的GT,去除标签位
-    gt_boxes = tf.gather_nd(gt_boxes, gt_indices)[:, :-1]
-    gt_cls = tf.gather_nd(gt_cls, gt_indices)[:, :-1]
+    gt_boxes = tf.gather_nd(gt_boxes, gt_indices, name='rpn_target_gt_boxes')[:, :-1]
+    gt_cls = tf.gather_nd(gt_cls, gt_indices, name='rpn_target_gt_cls')[:, :-1]
 
     # 计算IoU
     iou = compute_iou(gt_boxes, anchors)
@@ -104,20 +104,20 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     anchors_iou_max = tf.reduce_max(iou, axis=0)
 
     # 正样本索引号（iou>0.7),[[0],[2]]转为[0,2]
-    positive_indices = tf.where(anchors_iou_max > 0.7)  # [:, 0]
+    positive_indices = tf.where(anchors_iou_max > 0.7, name='rpn_target_positive_indices')  # [:, 0]
 
     # 负样本索引号
-    negative_indices = tf.where(anchors_iou_max < 0.3)  # [:, 0]
+    negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
 
     # 正样本
     positive_num = int(rpn_train_anchors * 0.5)  # 正负比例1:1
-    positive_num = tf.minimum(positive_num, tf.shape(positive_indices)[0])
+    positive_num = tf.minimum(positive_num, tf.shape(positive_indices)[0], name='rpn_target_positive_num')
     positive_indices = tf.random_shuffle(positive_indices)[:positive_num]
     positive_anchors = tf.gather_nd(anchors, positive_indices)
 
     # 负样本
     negative_num = tf.minimum(rpn_train_anchors - positive_num,
-                              tf.shape(positive_indices)[0])
+                              tf.shape(negative_indices)[0], name='rpn_target_negative_num')
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
     # negative_anchors = tf.gather_nd(anchors, negative_indices)
 
@@ -137,30 +137,38 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     negative_gt_cls = tf.stack([tf.ones([negative_num]),
                                 tf.zeros([negative_num])], axis=1)  # 负样本稀疏编码[1,0]
     class_ids = tf.concat([positive_gt_cls, negative_gt_cls], axis=0)
-    class_ids = tf.pad(class_ids, [[0, pad_num], [0, 0]])  # padding
+    class_ids = tf.pad(class_ids, [[0, pad_num], [0, 0]], name='rpn_target_class_ids')  # padding
 
-    deltas = tf.pad(deltas, [[0, negative_num + pad_num], [0, 0]])
+    deltas = tf.pad(deltas, [[0, negative_num + pad_num], [0, 0]], name='rpn_target_deltas')
 
     # 处理索引,记录正负anchor索引位置，第二位为标志位1位前景、0为背景、-1位padding
     positive_part = tf.stack([positive_indices[:, 0], tf.ones([positive_num], dtype=tf.int64)], axis=1)
     negative_part = tf.stack([negative_indices[:, 0], tf.zeros([negative_num], dtype=tf.int64)], axis=1)
     pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
-    indices = tf.concat([positive_part, negative_part, pad_part], axis=0)
+    indices = tf.concat([positive_part, negative_part, pad_part], axis=0, name='rpn_target_indices')
 
     return class_ids, deltas, indices
 
 
 class RpnTarget(keras.layers.Layer):
-    def __init__(self, **kwargs):
+    def __init__(self, batch_size, train_anchors_per_image, **kwargs):
+        """
+
+        :param batch_size: batch_size大小
+        :param train_anchors_per_image: 每张图训练的正负anchors数，不足时零padding填充
+        :param kwargs:
+        """
         super(RpnTarget, self).__init__(**kwargs)
+        self.batch_size = batch_size
+        self.train_anchors_per_image = train_anchors_per_image
 
     def call(self, inputs, **kwargs):
         """
         计算分类和回归目标
         :param inputs:
-        inputs[0]: GT 边框坐标 [batch_num,MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=-1 为padding
-        inputs[1]: GT 类别 [batch_num,MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=-1 为padding
-        inputs[2]: Anchors [batch_num,anchor_num,(y1,x1,y2,x2)]
+        inputs[0]: GT 边框坐标 [batch_size, MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=-1 为padding
+        inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=-1 为padding
+        inputs[2]: Anchors [batch_size, anchor_num,(y1,x1,y2,x2)]
         :param kwargs:
         :return:
         """
@@ -170,14 +178,14 @@ class RpnTarget(keras.layers.Layer):
 
         outputs = tf_utils.batch_slice(
             [gt_boxes, gt_cls_ids, anchors],
-            lambda x, y, z: rpn_targets_graph(x, y, z, 256), 2)
+            lambda x, y, z: rpn_targets_graph(x, y, z, 256), self.batch_size)
 
         return outputs
 
     def compute_output_shape(self, input_shape):
-        return [(None, 256, 2),  # 只有两类
-                (None, 256, 4),
-                (None, 256, 2)
+        return [(input_shape[0], self.train_anchors_per_image, 2),  # 只有两类
+                (input_shape[0], self.train_anchors_per_image, 4),
+                (input_shape[0], self.train_anchors_per_image, 2)
                 ]
 
 

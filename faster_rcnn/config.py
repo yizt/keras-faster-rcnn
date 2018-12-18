@@ -201,7 +201,7 @@ class Config(object):
     TRAIN_BN = False  # Defaulting to False since batch size is often small
 
     # Gradient norm clipping
-    GRADIENT_CLIP_NORM = 5.0
+    GRADIENT_CLIP_NORM = 1.0
 
     def __init__(self):
         """Set values of computed attributes."""
@@ -245,8 +245,14 @@ class VOCConfig(Config):
     NUM_CLASSES = 1 + 20  # voc has 20 classes
 
     weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    voc_path = '/opt/dataset/VOCdevkit'
+
+class LocalVOCConfig(VOCConfig):
+
+    weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    voc_path ='d:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
 
 
 
 # 当前配置
-current_config = VOCConfig()
+current_config = LocalVOCConfig()

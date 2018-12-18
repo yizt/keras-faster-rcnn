@@ -19,7 +19,7 @@ from faster_rcnn.layers.target import RpnTarget
 from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss
 
 
-def rpn_net(image_shape, max_gt_num):
+def rpn_net(image_shape, max_gt_num, batch_size):
     input_image = Input(shape=image_shape)
     input_class_ids = Input(shape=(max_gt_num, 2 + 1))
     input_bboxes = Input(shape=(max_gt_num, 4 + 1))
@@ -29,7 +29,7 @@ def rpn_net(image_shape, max_gt_num):
 
     # 生成anchor和目标
     anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2], 16)(features)
-    target = RpnTarget()([input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
+    target = RpnTarget(batch_size, 256)([input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
 
     # 定义损失layer
     cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
@@ -102,7 +102,7 @@ def compile(keras_model, config, learning_rate, momentum):
 
 def rpn(base_layers, num_anchors):
     x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal')(base_layers)
-    x_class = Conv2D(num_anchors * 2, (1, 1))(x)
+    x_class = Conv2D(num_anchors * 2, (1, 1), kernel_initializer='uniform', activation='linear')(x)
     x_class = Reshape((-1, 2))(x_class)
     x_regr = Conv2D(num_anchors * 4, (1, 1))(x)
     x_regr = Reshape((-1, 4))(x_regr)
