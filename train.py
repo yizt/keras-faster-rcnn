@@ -42,25 +42,25 @@ def generator(all_image_info, batch_size):
 
 
 if __name__ == '__main__':
-    from tensorflow.python import debug as tf_debug
-    import keras.backend as K
-
-    sess = K.get_session()
-    sess = tf_debug.LocalCLIDebugWrapperSession(sess)
-    sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
-
-    K.set_session(sess)
+    # from tensorflow.python import debug as tf_debug
+    # import keras.backend as K
+    #
+    # sess = K.get_session()
+    # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
+    #
+    # K.set_session(sess)
 
     # voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
     # voc_path = 'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
     # voc_path = '/opt/dataset/VOCdevkit'
     all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path)
-    m = rpn_net((224, 224, 3), 50, 4)
+    m = rpn_net((224, 224, 3), 50, config.IMAGES_PER_GPU)
     m.load_weights(config.weights, by_name=True)
     # m.load_weights('resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5', by_name=True)
     compile(m, config, 1e-4, 0.9)
     m.summary()
 
-    m.fit_generator(generator(all_img_info, 4),
-                    epochs=3,
-                    steps_per_epoch=len(all_img_info) // 4)
+    m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
+                    epochs=10,
+                    steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU)

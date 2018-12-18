@@ -26,6 +26,7 @@ def rpn_net(image_shape, max_gt_num, batch_size):
     input_image_meta = Input(shape=(12,))
     # 特征及预测结果
     features = resnet50(input_image)
+    # features = resnet_test_net(input_image)
     boxes_regress, class_ids = rpn(features, 9)
 
     # 生成anchor和目标
@@ -105,7 +106,8 @@ def rpn(base_layers, num_anchors):
     x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal')(base_layers)
     x_class = Conv2D(num_anchors * 2, (1, 1), kernel_initializer='uniform', activation='linear')(x)
     x_class = Reshape((-1, 2))(x_class)
-    x_regr = Conv2D(num_anchors * 4, (1, 1))(x)
+    x_regr = Conv2D(num_anchors * 4, (1, 1),
+                    kernel_initializer=keras.initializers.normal(mean=0.0, stddev=0.01, seed=None))(x)
     x_regr = Reshape((-1, 4))(x_regr)
     return x_regr, x_class
 
@@ -153,6 +155,11 @@ def resnet50(input):
 
     # model = Model(input, x, name='resnet50')
 
+    return x
+
+
+def resnet_test_net(input):
+    x = Conv2D(512, (1, 1), strides=(32, 32))(input)
     return x
 
 

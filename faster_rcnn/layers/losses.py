@@ -48,9 +48,9 @@ def smooth_l1_loss(y_true, y_predict):
     :param y_predict:[N,4]
     :return:
     """
-    abs_diff = tf.abs(y_true - y_predict)
-    loss = tf.where(abs_diff < 1, 0.5 * tf.pow(abs_diff, 2), abs_diff - 0.5)
-    return tf.reduce_sum(loss, axis=1)
+    abs_diff = tf.abs(y_true - y_predict, name='abs_diff')
+    loss = tf.where(tf.less(abs_diff, 1), 0.5 * tf.pow(abs_diff, 2), abs_diff - 0.5)
+    return tf.reduce_mean(loss, axis=1)
 
 
 def rpn_regress_loss(predict_deltas, deltas, indices):
@@ -73,13 +73,18 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     # 正样本anchor的2维索引
     train_indices_2d = tf.stack([batch_indices, true_postive_indices], axis=1)
     # 正样本anchor预测的回归类型
-    predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d)
+    predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d, name='rpn_regress_loss_predict_deltas')
     # 真实回归目标,去除padding,打平前两维
     deltas_padding = tf.reduce_all(tf.equal(deltas, 0), axis=-1)  # 最后一维全为0，是padding
-    deltas = tf.boolean_mask(deltas, tf.logical_not(deltas_padding))
+    deltas = tf.boolean_mask(deltas, tf.logical_not(deltas_padding), name='rpn_regress_loss_deltas')
     #
     # shape = tf.shape(deltas)
     # deltas = tf.reshape(deltas, [tf.reduce_prod(shape[:2]), shape[-1]])
 
-    # Smooth-L1
-    return smooth_l1_loss(deltas, predict_deltas)
+    # Smooth-L1 # 非常重要，不然报NAN
+    import keras.backend as K
+    loss = K.switch(tf.size(deltas) > 0,
+                    smooth_l1_loss(deltas, predict_deltas),
+                    tf.constant(0.0))
+    loss = K.mean(loss)
+    return loss

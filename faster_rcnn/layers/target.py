@@ -104,7 +104,12 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     anchors_iou_max = tf.reduce_max(iou, axis=0)
 
     # 正样本索引号（iou>0.7),[[0],[2]]转为[0,2]
-    positive_indices = tf.where(anchors_iou_max > 0.7, name='rpn_target_positive_indices')  # [:, 0]
+    positive_indices = tf.where(anchors_iou_max > 0.6, name='rpn_target_positive_indices')  # [:, 0]
+
+    # # 每个GT最大的anchor也是正样本
+    # gt_iou_argmax = tf.argmax(iou, axis=1)
+    # gt_iou_max = tf.reduce_max(iou, axis=1)
+
 
     # 负样本索引号
     negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
@@ -178,7 +183,7 @@ class RpnTarget(keras.layers.Layer):
 
         outputs = tf_utils.batch_slice(
             [gt_boxes, gt_cls_ids, anchors],
-            lambda x, y, z: rpn_targets_graph(x, y, z, 256), self.batch_size)
+            lambda x, y, z: rpn_targets_graph(x, y, z, self.train_anchors_per_image), self.batch_size)
 
         return outputs
 
