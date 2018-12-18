@@ -11,6 +11,7 @@ anchor层，生成anchors
 import tensorflow as tf
 import keras
 import numpy as np
+from faster_rcnn.utils import tf_utils
 
 
 def generate_anchors(base_size, ratios, scales):
@@ -31,6 +32,26 @@ def generate_anchors(base_size, ratios, scales):
     w = np.reshape(w, (-1, 1))
 
     return np.hstack([-0.5 * h, -0.5 * w, 0.5 * h, 0.5 * w])
+
+
+def clip_boxes(boxes, window):
+    """
+    将boxes裁剪到指定的窗口范围内
+    :param boxes: [N,(y1,x1,y2,x2)]
+    :param window: [y1,x1,y2,x2]
+    :return:
+    """
+    wy1, wx1, wy2, wx2 = tf.split(window, 4)
+    y1, x1, y2, x2 = tf.split(boxes, 4, axis=1)  # split后维数不变
+
+    y1 = tf.maximum(tf.minimum(y1, wy2), wy1)  # wy1<=y1<=wy2
+    y2 = tf.maximum(tf.minimum(y2, wy2), wy1)
+    x1 = tf.maximum(tf.minimum(x1, wx2), wx1)
+    x2 = tf.maximum(tf.minimum(x2, wx2), wx1)
+
+    clipped_boxes = tf.concat([y1, x1, y2, x2], axis=1, name='clipped_boxes')
+    # clipped_boxes.([boxes.shape[0], 4])
+    return clipped_boxes
 
 
 def shift(shape, strides, base_anchors):
@@ -64,15 +85,17 @@ def shift(shape, strides, base_anchors):
 
 
 class Anchor(keras.layers.Layer):
-    def __init__(self, base_size, ratios, scales, strides, **kwargs):
+    def __init__(self, batch_size, base_size, ratios, scales, strides, **kwargs):
         """
 
+        :param batch_size: batch_size 大小
         :param base_size: anchor的base_size,如：64
-        :param strides: 步长
-        :param ratios: 长宽比
-        :param scales: 缩放比
+        :param ratios: 长宽比; 如 [1,1/2,2]
+        :param scales: 缩放比: 如 [1,2,4]
+        :param strides: 步长,一般为base_size的四分之一
         """
         super(Anchor, self).__init__(**kwargs)
+        self.batch_size = batch_size
         self.base_size = base_size
         self.strides = strides
         self.ratios = ratios
@@ -84,28 +107,38 @@ class Anchor(keras.layers.Layer):
     def call(self, inputs, **kwargs):
         """
 
-        :param inputs: 卷积层特征(锚点所在层)，shape：[batch_num,H,W,C]
+        :param inputs：输入
+        input[0]: 卷积层特征(锚点所在层)，shape：[batch_size,H,W,C]
+        input[1]: 图像的元数据信息, shape: [batch_size, 12 ];
         :param kwargs:
         :return:
         """
-        features = inputs
+        features = inputs[0]
+        metas = inputs[1]
         features_shape = tf.shape(features)
         print("feature_shape:{}".format(features_shape))
 
         base_anchors = generate_anchors(self.base_size, self.ratios, self.scales)
         anchors = shift(features_shape[1:3], self.strides, base_anchors)
-        # 扩展第一维，batch_num;每个样本都有相同的anchors
-        return tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
+        # 扩展第一维，batch_size;每个样本都有相同的anchors
+        anchors = tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
+
+        # 裁剪到原始图片所在窗口内
+        clipped_anchors = tf_utils.batch_slice([anchors, metas[:, 7:11]],
+                                               lambda x, y: clip_boxes(x, y),
+                                               self.batch_size)
+        return clipped_anchors
 
     def compute_output_shape(self, input_shape):
         """
 
-        :param input_shape: [batch_num,H,W,C]
+        :param input_shape: [batch_size,H,W,C]
         :return:
         """
         # 计算所有的anchors数量
-        total = np.prod(input_shape[1:3]) * self.num_anchors
-        return [input_shape[0], total, 4]
+        total = np.prod(input_shape[0][1:3]) * self.num_anchors
+        # total = 49 * self.num_anchors
+        return [None, total, 4]
 
 
 if __name__ == '__main__':

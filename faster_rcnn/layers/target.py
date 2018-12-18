@@ -39,7 +39,7 @@ def compute_iou(gt_boxes, anchors):
     # 计算并集
     union = area_gt + area_anchor - intersect
     # 交并比
-    iou = intersect / union
+    iou = tf.divide(intersect, union, name='regress_target_iou')
     return iou
 
 
@@ -183,10 +183,9 @@ class RpnTarget(keras.layers.Layer):
         return outputs
 
     def compute_output_shape(self, input_shape):
-        return [(input_shape[0], self.train_anchors_per_image, 2),  # 只有两类
-                (input_shape[0], self.train_anchors_per_image, 4),
-                (input_shape[0], self.train_anchors_per_image, 2)
-                ]
+        return [(None, self.train_anchors_per_image, 2),  # 只有两类
+                (None, self.train_anchors_per_image, 4),
+                (None, self.train_anchors_per_image, 2)]
 
 
 if __name__ == '__main__':

@@ -23,12 +23,14 @@ def rpn_net(image_shape, max_gt_num, batch_size):
     input_image = Input(shape=image_shape)
     input_class_ids = Input(shape=(max_gt_num, 2 + 1))
     input_bboxes = Input(shape=(max_gt_num, 4 + 1))
+    input_image_meta = Input(shape=(12,))
     # 特征及预测结果
     features = resnet50(input_image)
     boxes_regress, class_ids = rpn(features, 9)
 
     # 生成anchor和目标
-    anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2], 16)(features)
+    anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
+                     16)([features, input_image_meta])
     target = RpnTarget(batch_size, 256)([input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
 
     # 定义损失layer
@@ -37,7 +39,7 @@ def rpn_net(image_shape, max_gt_num, batch_size):
     regress_loss = Lambda(lambda x: rpn_regress_loss(*x), name='rpn_bbox_loss')(
         [boxes_regress, target[1], target[2]])
 
-    return Model(inputs=[input_image, input_class_ids, input_bboxes],
+    return Model(inputs=[input_image, input_image_meta, input_class_ids, input_bboxes],
                  outputs=[cls_loss, regress_loss])
 
 
@@ -53,8 +55,7 @@ def compile(keras_model, config, learning_rate, momentum):
     # First, clear previously set losses to avoid duplication
     keras_model._losses = []
     keras_model._per_input_losses = {}
-    loss_names = [
-        "rpn_class_loss"]  # , "rpn_bbox_loss"
+    loss_names = ["rpn_bbox_loss", "rpn_class_loss"]  # , "rpn_bbox_loss",rpn_class_loss
     for name in loss_names:
         layer = keras_model.get_layer(name)
         if layer.output in keras_model.losses:
@@ -86,7 +87,7 @@ def compile(keras_model, config, learning_rate, momentum):
         loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
                 * config.LOSS_WEIGHTS.get(name, 1.))
-    keras_model.metrics_tensors.append(loss)
+        keras_model.metrics_tensors.append(loss)
 
 
 #
