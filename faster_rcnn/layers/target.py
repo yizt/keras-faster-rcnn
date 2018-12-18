@@ -110,7 +110,6 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     # gt_iou_argmax = tf.argmax(iou, axis=1)
     # gt_iou_max = tf.reduce_max(iou, axis=1)
 
-
     # 负样本索引号
     negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
 
@@ -152,7 +151,9 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
     indices = tf.concat([positive_part, negative_part, pad_part], axis=0, name='rpn_target_indices')
 
-    return class_ids, deltas, indices
+    return class_ids, deltas, indices, \
+           tf.Variable(tf.shape(gt_cls)[0]), \
+           tf.Variable(positive_num)
 
 
 class RpnTarget(keras.layers.Layer):
@@ -183,14 +184,17 @@ class RpnTarget(keras.layers.Layer):
 
         outputs = tf_utils.batch_slice(
             [gt_boxes, gt_cls_ids, anchors],
-            lambda x, y, z: rpn_targets_graph(x, y, z, self.train_anchors_per_image), self.batch_size)
+            lambda x, y, z:
+            rpn_targets_graph(x, y, z, self.train_anchors_per_image), self.batch_size)
 
         return outputs
 
     def compute_output_shape(self, input_shape):
         return [(None, self.train_anchors_per_image, 2),  # 只有两类
                 (None, self.train_anchors_per_image, 4),
-                (None, self.train_anchors_per_image, 2)]
+                (None, self.train_anchors_per_image, 2),
+                (None),
+                (None)]
 
 
 if __name__ == '__main__':

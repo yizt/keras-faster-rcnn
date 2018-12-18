@@ -32,7 +32,8 @@ def rpn_net(image_shape, max_gt_num, batch_size):
     # 生成anchor和目标
     anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
                      16)([features, input_image_meta])
-    target = RpnTarget(batch_size, 256)([input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
+    target = RpnTarget(batch_size, 256, name='rpn_target')(
+        [input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
 
     # 定义损失layer
     cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
@@ -89,6 +90,16 @@ def compile(keras_model, config, learning_rate, momentum):
                 tf.reduce_mean(layer.output, keepdims=True)
                 * config.LOSS_WEIGHTS.get(name, 1.))
         keras_model.metrics_tensors.append(loss)
+
+    # 增加GT个数，正样本anchor数指标的统计
+    layer = keras_model.get_layer('rpn_target')
+    keras_model.metrics_names.append('gt_num')
+    gt_num = tf.reduce_mean(layer.output[3], keepdims=True)
+    keras_model.metrics_tensors.append(gt_num)
+
+    keras_model.metrics_names.append('positive_anchor_num')
+    positive_anchor_num = tf.reduce_mean(layer.output[4], keepdims=True)
+    keras_model.metrics_tensors.append(positive_anchor_num)
 
 
 #
