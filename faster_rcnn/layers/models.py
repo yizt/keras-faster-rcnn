@@ -31,7 +31,7 @@ def rpn_net(image_shape, max_gt_num, batch_size):
 
     # 生成anchor和目标
     anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     16)([features, input_image_meta])
+                     32)([features, input_image_meta])
     target = RpnTarget(batch_size, 256, name='rpn_target')(
         [input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
 
@@ -94,12 +94,13 @@ def compile(keras_model, config, learning_rate, momentum):
     # 增加GT个数，正样本anchor数指标的统计
     layer = keras_model.get_layer('rpn_target')
     keras_model.metrics_names.append('gt_num')
-    gt_num = tf.reduce_mean(layer.output[3], keepdims=True)
-    keras_model.metrics_tensors.append(gt_num)
+    keras_model.metrics_tensors.append(layer.output[3])
 
     keras_model.metrics_names.append('positive_anchor_num')
-    positive_anchor_num = tf.reduce_mean(layer.output[4], keepdims=True)
-    keras_model.metrics_tensors.append(positive_anchor_num)
+    keras_model.metrics_tensors.append(layer.output[4])
+
+    keras_model.metrics_names.append('miss_match_gt_num')
+    keras_model.metrics_tensors.append(layer.output[5])
 
 
 #

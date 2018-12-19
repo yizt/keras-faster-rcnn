@@ -151,9 +151,11 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
     indices = tf.concat([positive_part, negative_part, pad_part], axis=0, name='rpn_target_indices')
 
-    return class_ids, deltas, indices, \
-           tf.Variable(tf.shape(gt_cls)[0]), \
-           tf.Variable(positive_num)
+    # 其它统计指标
+    gt_num = tf.shape(gt_cls)[0]  # GT数
+    miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
+
+    return class_ids, deltas, indices, gt_num, positive_num, miss_match_gt_num
 
 
 class RpnTarget(keras.layers.Layer):
@@ -190,11 +192,12 @@ class RpnTarget(keras.layers.Layer):
         return outputs
 
     def compute_output_shape(self, input_shape):
-        return [(None, self.train_anchors_per_image, 2),  # 只有两类
-                (None, self.train_anchors_per_image, 4),
-                (None, self.train_anchors_per_image, 2),
-                (None),
-                (None)]
+        return [(input_shape[0][0], self.train_anchors_per_image, 2),  # 只有两类
+                (input_shape[0][0], self.train_anchors_per_image, 4),
+                (input_shape[0][0], self.train_anchors_per_image, 2),
+                (input_shape[0][0],),
+                (input_shape[0][0],),
+                (input_shape[0][0],)]
 
 
 if __name__ == '__main__':

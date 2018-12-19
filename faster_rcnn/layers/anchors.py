@@ -138,7 +138,8 @@ class Anchor(keras.layers.Layer):
         # 计算所有的anchors数量
         total = np.prod(input_shape[0][1:3]) * self.num_anchors
         # total = 49 * self.num_anchors
-        return [None, total, 4]
+        return (input_shape[0][0],
+                total, 4)
 
 
 if __name__ == '__main__':
