@@ -25,7 +25,7 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     # 每个训练anchor的索引
     train_anchor_indices = train_anchors[:, 0]  # 每个anchor的在所有anchors中的索引
     # 每个训练anchor的2维索引
-    train_indices_2d = tf.stack([batch_indices, train_anchor_indices], axis=1)
+    train_indices_2d = tf.stack([batch_indices, tf.cast(train_anchor_indices, dtype=tf.int64)], axis=1)
     # 获取预测的anchors类别
     predict_cls_ids = tf.gather_nd(predict_cls_ids, train_indices_2d)  # (train_num,2)
 
@@ -71,7 +71,7 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     # anchor索引
     true_postive_indices = train_anchors[:, 0]
     # 正样本anchor的2维索引
-    train_indices_2d = tf.stack([batch_indices, true_postive_indices], axis=1)
+    train_indices_2d = tf.stack([batch_indices, tf.cast(true_postive_indices, dtype=tf.int64)], axis=1)
     # 正样本anchor预测的回归类型
     predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d, name='rpn_regress_loss_predict_deltas')
     # 真实回归目标,去除padding,打平前两维
