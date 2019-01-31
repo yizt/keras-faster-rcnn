@@ -221,3 +221,15 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
             order=order, mode=mode, cval=cval, clip=clip,
             preserve_range=preserve_range)
 
+
+def pad_to_fixed_size(input_tensor, fixed_size):
+    """
+    增加padding到固定尺寸,在第二维增加一个标志位,0-padding,1-非padding
+    :param input_tensor: 二维张量
+    :param fixed_size:
+    :return:
+    """
+    x = tf.pad(input_tensor, [[0, 0], [0, 1]], mode='CONSTANT', constant_values=1)
+    padding_size = fixed_size - tf.shape(x)[0]
+    x = tf.pad(x, [[0, padding_size, [0, 0]]], mode='CONSTANT', constant_values=0)
+    return x
