@@ -7,9 +7,11 @@ Created on 2018/11/13 9:57
 """
 import numpy as np
 from faster_rcnn.preprocess.pascal_voc import PascalVoc, get_voc_data
-from faster_rcnn.preprocess.input import load_image_gt, parse_image_meta
-from faster_rcnn.config import VOCConfig
+from faster_rcnn.utils.image import load_image_gt, parse_image_meta
+from faster_rcnn.config import current_config as config
 import tensorflow as tf
+from faster_rcnn.layers.models import rpn_net
+from faster_rcnn.utils import visualize, np_utils
 
 
 def clean_name(name):
@@ -31,23 +33,36 @@ def voc_test():
     print(voc.class_from_source_map)
     print(voc.image_info[1])
 
-    image, image_meta, class_ids, bbox = load_image_gt(voc, VOCConfig(), 3)
+    image, image_meta, class_ids, bbox = load_image_gt(voc, config, 3)
     print(parse_image_meta(np.asarray([image_meta])))
 
 
 if __name__ == '__main__':
-    # sess = tf.Session()
+    # from tensorflow.python import debug as tf_debug
+    # import keras.backend as K
     #
-    # x = tf.ones([10])
-    # y = tf.nn.top_k(tf.Variable([1, 3, 7, 4]) * -1, 4, sorted=False)
-    # x = tf.sparse_to_dense(y[0] * -1, [10], 1)
-    #
-    # sess.run(tf.global_variables_initializer())
-    #
-    # print(sess.run(y[0]))
-    # print(sess.run(x))
-    # print(sess.run(tf.stack([tf.ones([0]), tf.ones([0])], axis=1)))
+    # sess = K.get_session()
+    # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
+    # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
-    import os
-    print(os.listdir('d:\work\图像识别\VOCtrainval_06-Nov-2007'))
+    # K.set_session(sess)
+    # 加载数据
+    all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path)
+    id = 3
+    image, image_meta, class_ids, bbox = load_image_gt(config, all_img_info[id], id)
+    print(image.shape)
+    # 加载网络
+    m = rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, 1, stage='test')
+    m.load_weights(config.weights, by_name=True)
+    m.summary()
+    boxes, scores = m.predict([np.expand_dims(image, axis=0), np.expand_dims(image_meta, axis=0)])
 
+    boxes = np_utils.remove_pad(boxes)
+    scores = np_utils.remove_pad(scores)
+    visualize.display_instances(image, boxes,
+                                [1] * len(boxes),
+                                ['fg'] * len(boxes),
+                                scores=np.squeeze(scores, axis=1))
+
+    print(boxes)
+    print(scores)

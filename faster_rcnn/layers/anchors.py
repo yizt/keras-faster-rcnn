@@ -16,11 +16,11 @@ from faster_rcnn.utils import tf_utils
 
 def generate_anchors(base_size, ratios, scales):
     """
-
+    根据基准尺寸、长宽比、缩放比生成边框
     :param base_size: anchor的base_size,如：（64，64）
     :param ratios: 长宽比 shape:(M,)
     :param scales: 缩放比 shape:(N,)
-    :return: （N*M,2)
+    :return: （N*M,(y1,x1,y2,x2))
     """
     ratios = np.expand_dims(np.array(ratios), axis=1)  # (N,1)
     scales = np.expand_dims(np.array(scales), axis=0)  # (1,M)
@@ -37,8 +37,8 @@ def generate_anchors(base_size, ratios, scales):
 def clip_boxes(boxes, window):
     """
     将boxes裁剪到指定的窗口范围内
-    :param boxes: [N,(y1,x1,y2,x2)]
-    :param window: [y1,x1,y2,x2]
+    :param boxes: 边框坐标，[N,(y1,x1,y2,x2)]
+    :param window: 窗口坐标，[N,(y1,x1,y2,x2)]
     :return:
     """
     wy1, wx1, wy2, wx2 = tf.split(window, 4)
@@ -62,8 +62,7 @@ def shift(shape, strides, base_anchors):
     :param base_anchors:所有的基准anchors，(anchor_num,4)
     :return:
     """
-    H = shape[0]
-    W = shape[1]
+    H, W = shape
     print("shape:{}".format(shape))
     ctr_x = (tf.cast(tf.range(H), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
     ctr_y = (tf.cast(tf.range(W), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
@@ -74,13 +73,13 @@ def shift(shape, strides, base_anchors):
     ctr_x = tf.reshape(ctr_x, [-1])
     ctr_y = tf.reshape(ctr_y, [-1])
     #  (H*W,1,4)
-    shifts = tf.expand_dims(tf.transpose(tf.stack([ctr_y, ctr_x, ctr_y, ctr_x])), axis=1)
+    shifts = tf.expand_dims(tf.stack([ctr_y, ctr_x, ctr_y, ctr_x], axis=1), axis=1)
     # (1,anchor_num,4)
     base_anchors = tf.expand_dims(tf.constant(base_anchors, dtype=tf.float32), axis=0)
 
     # (H*W,anchor_num,4)
     anchors = shifts + base_anchors
-    # 转为(H*W*anchor*num,4) 返回
+    # 转为(H*W*anchor_num,4) 返回
     return tf.reshape(anchors, [-1, 4])
 
 
@@ -94,7 +93,6 @@ class Anchor(keras.layers.Layer):
         :param scales: 缩放比: 如 [1,2,4]
         :param strides: 步长,一般为base_size的四分之一
         """
-        super(Anchor, self).__init__(**kwargs)
         self.batch_size = batch_size
         self.base_size = base_size
         self.strides = strides
@@ -103,6 +101,7 @@ class Anchor(keras.layers.Layer):
         # base anchors数量
         self.num_anchors = len(ratios) * len(scales)
         self.name = 'anchors'
+        super(Anchor, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
         """
@@ -145,6 +144,7 @@ class Anchor(keras.layers.Layer):
 if __name__ == '__main__':
     sess = tf.Session()
     achrs = generate_anchors(64, [1], [1, 2, 4])
+    print(achrs)
     all_achrs = shift([3, 3], 32, achrs)
     print(sess.run(tf.shape(all_achrs)))
     print(sess.run(all_achrs))

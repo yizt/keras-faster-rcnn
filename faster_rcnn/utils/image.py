@@ -8,7 +8,7 @@ Created on 2018/12/15 下午5:42
 
 """
 import skimage
-from skimage import io
+from skimage import io, transform
 
 import numpy as np
 import faster_rcnn.utils.tf_utils as tf_utils
@@ -20,17 +20,13 @@ def load_image(image_path):
     :param image_path: 图像路径
     :return: [h,w,3] numpy数组
     """
-    """Load the specified image and return a [H,W,3] Numpy array.
-    """
     # Load image
     image = io.imread(image_path)
     # If grayscale. Convert to RGB for consistency.
     if image.ndim != 3:
         image = skimage.color.gray2rgb(image)
-    # If has an alpha channel, remove it for consistency
-    if image.shape[-1] == 4:
-        image = image[..., :3]
-    return image
+    # 删除alpha通道
+    return image[..., :3]
 
 
 def load_image_gt(config, image_info, image_id):
@@ -59,12 +55,13 @@ def load_image_gt(config, image_info, image_id):
     # Load image and mask
     image = load_image(image_info['filepath'])
     original_shape = image.shape
-    image, window, scale, padding, crop = tf_utils.resize_image(
-        image,
-        min_dim=config.IMAGE_MIN_DIM,
-        min_scale=config.IMAGE_MIN_SCALE,
-        max_dim=config.IMAGE_MAX_DIM,
-        mode=config.IMAGE_RESIZE_MODE)
+    # image, window, scale, padding, _ = tf_utils.resize_image(
+    #     image,
+    #     min_dim=config.IMAGE_MIN_DIM,
+    #     min_scale=config.IMAGE_MIN_SCALE,
+    #     max_dim=config.IMAGE_MAX_DIM,
+    #     mode=config.IMAGE_RESIZE_MODE)
+    image, window, scale, padding = resize_image(image, config.IMAGE_MAX_DIM)
 
     # Bounding boxes. Note that some boxes might be all zeros
     # if the corresponding mask got cropped out.
@@ -78,6 +75,30 @@ def load_image_gt(config, image_info, image_id):
     bbox = adjust_box(bbox, padding, scale)
 
     return image, image_meta, class_ids, bbox
+
+
+def resize_image(image, max_dim):
+    """
+    缩放图像为正方形，指定长边大小，短边padding;
+    :param image: numpy 数组(H,W,3)
+    :param max_dim: 长边大小
+    :return: 缩放后的图像,元素图像的宽口位置，缩放尺寸，padding
+    """
+    image_dtype = image.dtype
+    h, w = image.shape[:2]
+    scale = max_dim / max(h, w)  # 缩放尺寸
+    image = transform.resize(image, (round(h * scale), round(w * scale)),
+                             order=1, mode='constant', cval=0, clip=True, preserve_range=True)
+    h, w = image.shape[:2]
+    # 计算padding
+    top_pad = (max_dim - h) // 2
+    bottom_pad = max_dim - h - top_pad
+    left_pad = (max_dim - w) // 2
+    right_pad = max_dim - w - left_pad
+    padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
+    image = np.pad(image, padding, mode='constant', constant_values=0)
+    window = (top_pad, left_pad, h + top_pad, w + left_pad)  #
+    return image.astype(image_dtype), window, scale, padding
 
 
 def compose_image_meta(image_id, original_image_shape, image_shape,
@@ -137,14 +158,14 @@ def extract_classids_and_bboxes(boxes_info):
     boxes = []
     class_ids = []
     for box_info in boxes_info:
-        #print(box_info)
+        # print(box_info)
         class_ids.append(box_info['class_id'])
         boxes.append([box_info['y1'],
                       box_info['x1'],
                       box_info['y2'],
                       box_info['x2']
                       ])
-    #print(class_ids)
+    # print(class_ids)
 
     boxes = np.asarray(boxes, dtype=np.int32)
     class_ids = np.asarray(class_ids, dtype=np.int32)
@@ -154,14 +175,14 @@ def extract_classids_and_bboxes(boxes_info):
 def adjust_box(boxes, padding, scale):
     """
     根据填充和缩放因子，调整boxes的值
-    :param boxes: [N,(y1,x1,y2,x2)]
+    :param boxes: numpy 数组; GT boxes [N,(y1,x1,y2,x2)]
     :param padding: [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
     :param scale: 缩放因子
     :return:
     """
     boxes = boxes * scale
-    boxes[:, 0::2] = boxes[:, 0::2] + padding[0][0]  # 高度padding
-    boxes[:, 1::2] = boxes[:, 1::2] + padding[1][0]  # 宽度padding
+    boxes[:, 0::2] += padding[0][0]  # 高度padding
+    boxes[:, 1::2] += boxes[:, 1::2] + padding[1][0]  # 宽度padding
     return boxes
 
 
@@ -173,7 +194,7 @@ def fix_num_pad(np_array, num):
     :return:
     """
     shape = np_array.shape
-    #print("np_array.shape:{}".format(shape))
+    # print("np_array.shape:{}".format(shape))
     # 增加tag 维
     pad_width = [(0, 0)] * (len(shape) - 1) + [(0, 1)]
     np_array = np.pad(np_array, pad_width, mode='constant', constant_values=0)

@@ -95,3 +95,7 @@ def display_instances(image, boxes, class_ids, class_names,
     ax.imshow(masked_image.astype(np.uint8))
     if auto_show:
         plt.show()
+
+
+if __name__ == '__main__':
+    print(random_colors(2))

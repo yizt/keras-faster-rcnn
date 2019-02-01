@@ -14,6 +14,7 @@ from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.pascal_voc import get_voc_data
 from faster_rcnn.utils.image import load_image_gt, fix_num_pad
 from faster_rcnn.layers.models import rpn_net, compile
+from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
 
 def generator(all_image_info, batch_size):
@@ -41,10 +42,30 @@ def generator(all_image_info, batch_size):
                np.asarray(batch_bbox)], None
 
 
+def get_call_back():
+    """
+    定义call back
+    :return:
+    """
+    checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-rpn.{epoch:03d}.h5',
+                                 monitor='acc',
+                                 verbose=1,
+                                 save_best_only=False)
+
+    # 验证误差没有提升
+    lr_reducer = ReduceLROnPlateau(monitor='loss',
+                                   factor=np.sqrt(0.1),
+                                   cooldown=1,
+                                   patience=1,
+                                   min_lr=0)
+    log = TensorBoard(log_dir='log')
+    return [checkpoint, lr_reducer]
+
+
 if __name__ == '__main__':
-    # from tensorflow.python import debug as tf_debug
-    # import keras.backend as K
-    #
+    from tensorflow.python import debug as tf_debug
+    import keras.backend as K
+
     # sess = K.get_session()
     # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
@@ -55,12 +76,14 @@ if __name__ == '__main__':
     # voc_path = 'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
     # voc_path = '/opt/dataset/VOCdevkit'
     all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path)
-    m = rpn_net((224, 224, 3), 50, config.IMAGES_PER_GPU)
-    m.load_weights(config.weights, by_name=True)
+    m = rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
+    m.load_weights(config.pretrained_weights, by_name=True)
     # m.load_weights('resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5', by_name=True)
     compile(m, config, 1e-4, 0.9)
     m.summary()
 
     m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
                     epochs=10,
-                    steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU)
+                    steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
+                    verbose=1,
+                    callbacks=get_call_back())

@@ -215,8 +215,8 @@ def apply_regress(deltas, anchors):
     w = anchors[:, 3] - anchors[:, 1]
 
     # 中心点坐标
-    cy = (anchors[:, 2] + anchors[:, 0]) * 2
-    cx = (anchors[:, 3] + anchors[:, 1]) * 2
+    cy = (anchors[:, 2] + anchors[:, 0]) * 0.5
+    cx = (anchors[:, 3] + anchors[:, 1]) * 0.5
 
     # 回归系数
     deltas *= tf.constant([0.1, 0.1, 0.2, 0.2])
@@ -251,7 +251,7 @@ def nms(boxes, scores, max_output_size, iou_threshold=0.5, score_threshold=0.05,
     """
     indices = tf.image.non_max_suppression(boxes, scores, max_output_size, iou_threshold, score_threshold, name)  # 一维索引
     output_boxes = tf.gather(boxes, indices)  # (M,4)
-    class_scores = tf.gather(scores, indices)
+    class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
     # padding到固定大小
     return tf_utils.pad_to_fixed_size(output_boxes, max_output_size), \
            tf_utils.pad_to_fixed_size(class_scores, max_output_size)
@@ -262,7 +262,7 @@ class RpnToProposal(keras.layers.Layer):
     生成候选框
     """
 
-    def __init__(self, batch_size, score_threshold=0.05, output_box_num=300, iou_threshold=0.5):
+    def __init__(self, batch_size, score_threshold=0.05, output_box_num=300, iou_threshold=0.5, **kwargs):
         """
 
         :param batch_size: batch_size
@@ -272,8 +272,9 @@ class RpnToProposal(keras.layers.Layer):
         """
         self.batch_size = batch_size
         self.score_threshold = score_threshold
-        self.max_box_num = output_box_num
+        self.output_box_num = output_box_num
         self.iou_threshold = iou_threshold
+        super(RpnToProposal, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
         """
@@ -289,19 +290,28 @@ class RpnToProposal(keras.layers.Layer):
         class_logits = inputs[1]
         anchors = inputs[2]
         # 转为分类评分
-        class_scores = tf.nn.softmax(logits=class_logits, axis=-1)[:, -1]  # 最后一类为前景 (N,)
+        class_scores = tf.nn.softmax(logits=class_logits, axis=-1)[..., -1]  # 最后一类为前景 (N,)
 
         # 应用边框回归
         proposals = tf_utils.batch_slice([deltas, anchors], lambda x, y: apply_regress(x, y), self.batch_size)
 
-        # 非极大抑制
-        output_boxes = tf_utils.batch_slice([proposals, class_scores],
-                                            lambda x, y: nms(x, y,
-                                                             max_output_size=self.output_box_num,
-                                                             iou_threshold=self.iou_threshold,
-                                                             score_threshold=self.score_threshold),
-                                            self.batch_size)
-        return output_boxes
+        # # 非极大抑制
+        outputs = tf_utils.batch_slice([proposals, class_scores],
+                                       lambda x, y: nms(x, y,
+                                                        max_output_size=self.output_box_num,
+                                                        iou_threshold=self.iou_threshold,
+                                                        score_threshold=self.score_threshold),
+                                       self.batch_size)
+        return outputs
+
+    def compute_output_shape(self, input_shape):
+        """
+        注意多输出，call返回值必须是列表
+        :param input_shape:
+        :return:
+        """
+        return [(input_shape[0][0], self.output_box_num, 4 + 1),
+                (input_shape[0][0], self.output_box_num, 1 + 1)]
 
 
 if __name__ == '__main__':
@@ -310,3 +320,4 @@ if __name__ == '__main__':
     b = tf.constant([[2, 2, 4, 6], [2, 3, 4, 6]], dtype=tf.float32)
     iou = compute_iou(a, b)
     print(sess.run(iou))
+    print(sess.run(tf.nn.softmax(b, axis=-1)))

@@ -231,8 +231,8 @@ class VOCConfig(Config):
     # Give the configuration a recognizable name
     NAME = "voc"
 
-    IMAGE_MIN_DIM = 224
-    IMAGE_MAX_DIM = 224
+    IMAGE_MIN_DIM = 304
+    IMAGE_MAX_DIM = 304
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
@@ -244,15 +244,16 @@ class VOCConfig(Config):
     # Number of classes (including background)
     NUM_CLASSES = 1 + 20  # voc has 20 classes
 
-    weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    pretrained_weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    weights = '/tmp/frcnn-rpn.010.h5'
     voc_path = '/opt/dataset/VOCdevkit'
 
+
 class LocalVOCConfig(VOCConfig):
-
-    weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
-    voc_path ='d:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
-
+    pretrained_weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    weights = 'frcnn-rpn.010.h5'
+    voc_path = r'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
 
 
 # 当前配置
-current_config = LocalVOCConfig()
+current_config = VOCConfig()

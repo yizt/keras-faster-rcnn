@@ -230,6 +230,28 @@ def pad_to_fixed_size(input_tensor, fixed_size):
     :return:
     """
     x = tf.pad(input_tensor, [[0, 0], [0, 1]], mode='CONSTANT', constant_values=1)
-    padding_size = fixed_size - tf.shape(x)[0]
-    x = tf.pad(x, [[0, padding_size, [0, 0]]], mode='CONSTANT', constant_values=0)
+    padding_size = tf.maximum(0, fixed_size - tf.shape(x)[0])
+    x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
     return x
+
+
+def remove_pad(input_tensor):
+    """
+
+    :param input_tensor:
+    :return:
+    """
+    pad_tag = input_tensor[..., -1]
+    real_size = tf.cast(tf.reduce_sum(pad_tag), tf.int32)
+    return input_tensor[:real_size, :-1]
+
+
+if __name__ == '__main__':
+    sess = tf.Session()
+    x = sess.run(tf.maximum(3.0, 2.0))
+    print(x)
+    a = tf.ones(shape=(3, 3))
+    b = pad_to_fixed_size(a, 4)
+    c = remove_pad(b)
+    print(sess.run(b))
+    print(sess.run(c))

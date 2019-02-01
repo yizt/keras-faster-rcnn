@@ -15,11 +15,11 @@ import tensorflow as tf
 
 from keras_applications.resnet50 import identity_block, conv_block
 from faster_rcnn.layers.anchors import Anchor
-from faster_rcnn.layers.target import RpnTarget
+from faster_rcnn.layers.target import RpnTarget, RpnToProposal
 from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss
 
 
-def rpn_net(image_shape, max_gt_num, batch_size):
+def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
     input_image = Input(shape=image_shape)
     input_class_ids = Input(shape=(max_gt_num, 2 + 1))
     input_bboxes = Input(shape=(max_gt_num, 4 + 1))
@@ -29,20 +29,28 @@ def rpn_net(image_shape, max_gt_num, batch_size):
     # features = resnet_test_net(input_image)
     boxes_regress, class_ids = rpn(features, 9)
 
-    # 生成anchor和目标
+    # 生成anchor
     anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     32)([features, input_image_meta])
-    target = RpnTarget(batch_size, 256, name='rpn_target')(
-        [input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
+                     16, name='gen_anchors')([features, input_image_meta])
 
-    # 定义损失layer
-    cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
-        [class_ids, target[0], target[2]])
-    regress_loss = Lambda(lambda x: rpn_regress_loss(*x), name='rpn_bbox_loss')(
-        [boxes_regress, target[1], target[2]])
+    if stage == 'train':
+        # 生成分类和回归目标
+        target = RpnTarget(batch_size, 256, name='rpn_target')(
+            [input_bboxes, input_class_ids, anchors])  # [cls_ids,deltas,indices]
+        # 定义损失layer
+        cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
+            [class_ids, target[0], target[2]])
+        regress_loss = Lambda(lambda x: rpn_regress_loss(*x), name='rpn_bbox_loss')(
+            [boxes_regress, target[1], target[2]])
 
-    return Model(inputs=[input_image, input_image_meta, input_class_ids, input_bboxes],
-                 outputs=[cls_loss, regress_loss])
+        return Model(inputs=[input_image, input_image_meta, input_class_ids, input_bboxes],
+                     outputs=[cls_loss, regress_loss])
+    else:  # 测试阶段
+        # 应用分类和回归
+        detect_boxes, class_scores = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+            [boxes_regress, class_ids, anchors])
+        return Model(inputs=[input_image, input_image_meta],
+                     outputs=[detect_boxes, class_scores])
 
 
 def compile(keras_model, config, learning_rate, momentum):
@@ -153,9 +161,9 @@ def resnet50(input):
     x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
     x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
 
-    x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+    # x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+    # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+    # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
 
     # # 确定精调层
     # no_train_model = Model(inputs=img_input, outputs=x)
