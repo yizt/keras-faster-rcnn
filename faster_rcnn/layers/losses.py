@@ -6,7 +6,6 @@ Created on 2018/12/4 10:46
 损失函数层
 """
 import tensorflow as tf
-from faster_rcnn.utils import tf_utils
 
 
 def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
@@ -89,6 +88,47 @@ def main():
     y = tf.one_hot(x, depth=2)
     sess = tf.Session()
     print(sess.run(y))
+
+
+def detect_cls_loss(predict_cls_ids, true_cls_ids):
+    """
+    检测分类损失函数
+    :param predict_cls_ids: 分类预测值 (batch_num, train_roi_num, num_classes)
+    :param true_cls_ids: roi实际类别(batch_num, train_roi_num, (class_id,tag))， tag 为0 是padding
+    :return:
+    """
+    # 去除padding
+    indices = tf.where(tf.not_equal(true_cls_ids[..., -1], 0))
+    predict_cls_ids = tf.gather_nd(predict_cls_ids, indices)  # 二维
+    true_cls_ids = tf.gather_nd(true_cls_ids[..., 0], indices)  # 一维，类别id
+    # 真实类别转one hot编码
+    num_classes = tf.shape(predict_cls_ids)[1]
+    true_cls_ids = tf.one_hot(true_cls_ids, depth=num_classes)
+
+    # 交叉熵损失函数
+    loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_cls_ids, logits=predict_cls_ids)
+    return loss
+
+
+def detect_regress_loss(predict_deltas, deltas):
+    """
+    检测网络回归损失
+    :param predict_deltas: 回归预测值 (batch_num, train_roi_num, (dy,dx,dh,dw)
+    :param deltas: 实际回归参数(batch_num, train_roi_num, (dy,dx,dh,dw,tag) ,tag：0-padding,-1-负样本,1-正样本
+    :return:
+    """
+    # 去除padding和负样本，保留正样本
+    indices = tf.where(tf.equal(deltas[..., -1], 1))
+    predict_deltas = tf.gather_nd(predict_deltas, indices)
+    deltas = tf.gather_nd(deltas[..., :-1], indices)
+
+    # Smooth-L1 # 非常重要，不然报NAN
+    import keras.backend as K
+    loss = K.switch(tf.size(deltas) > 0,
+                    smooth_l1_loss(deltas, predict_deltas),
+                    tf.constant(0.0))
+    loss = K.mean(loss)
+    return loss
 
 
 if __name__ == '__main__':

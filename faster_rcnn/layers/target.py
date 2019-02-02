@@ -288,6 +288,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     pad_num = train_rois_per_image - positive_num - negative_num
     deltas, class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
         [deltas, tf.expand_dims(class_ids, axis=1), train_rois], pad_num)  # class_ids分类扩一维
+    # 为后续处理方便负样本tag设置为-1
+    deltas[positive_num:positive_num + negative_num, -1] = -1
+
     return deltas, class_ids, train_rois
 
 
