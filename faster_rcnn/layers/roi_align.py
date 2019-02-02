@@ -6,6 +6,7 @@
    date：          2019/2/1
 """
 from keras import layers
+import tensorflow as tf
 
 
 class RoiAlign(layers.Layer):
@@ -22,6 +23,38 @@ class RoiAlign(layers.Layer):
         """
 
         :param inputs:
+        inputs[0]: feature maps  [batch_num,H,W,feature_channel_num]
+        inputs[1]: rois   [batch_num,roi_num,(y1,x1,y2,x2)] , 训练和测试时，roi_num不同
         :param kwargs:
         :return:
         """
+        features = inputs[0]
+        rois = inputs[1]
+        # 生成batch index
+        batch_size, roi_num = tf.shape(rois)[:2]
+        batch_index = tf.expand_dims(tf.range(batch_size), axis=1)
+        batch_index = tf.tile(batch_index, [1, roi_num])
+        batch_index = tf.reshape(batch_index, [-1])  # 类型[0,0,0,..,1,1,1...]
+        # RoiAlign
+        output = tf.image.crop_and_resize(image=features,
+                                          boxes=rois,
+                                          box_ind=batch_index,
+                                          crop_size=self.pool_size)  # (batch_size*roi_num,h,w,channels)
+        shape = tf.shape(output)
+        output = tf.reshape(output, [batch_size, roi_num] + shape[1:])
+        return output
+
+    def compute_output_shape(self, input_shape):
+        channel_num = input_shape[0][-1]  # feature通道数
+        return input_shape[1][:2] + self.pool_size + (channel_num,)  # (batch_size,roi_num,h,w,channels)
+
+
+def main():
+    x = tf.expand_dims(tf.range(2), axis=1)
+    y = tf.tile(x, [1, 3])
+    sess = tf.Session()
+    print(sess.run(tf.reshape(y, [-1])))
+
+
+if __name__ == '__main__':
+    main()
