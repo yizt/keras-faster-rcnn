@@ -235,6 +235,10 @@ def pad_to_fixed_size(input_tensor, fixed_size):
     return x
 
 
+def pad_list_to_fixed_size(tensor_list, fixed_size):
+    return [pad_to_fixed_size(tensor, fixed_size) for tensor in tensor_list]
+
+
 def remove_pad(input_tensor):
     """
 

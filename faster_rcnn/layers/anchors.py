@@ -64,8 +64,8 @@ def shift(shape, strides, base_anchors):
     """
     H, W = shape
     print("shape:{}".format(shape))
-    ctr_x = (tf.cast(tf.range(H), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
-    ctr_y = (tf.cast(tf.range(W), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
+    ctr_x = (tf.cast(tf.range(W), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
+    ctr_y = (tf.cast(tf.range(H), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
 
     ctr_x, ctr_y = tf.meshgrid(ctr_x, ctr_y)
 

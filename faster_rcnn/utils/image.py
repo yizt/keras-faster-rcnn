@@ -182,7 +182,7 @@ def adjust_box(boxes, padding, scale):
     """
     boxes = boxes * scale
     boxes[:, 0::2] += padding[0][0]  # 高度padding
-    boxes[:, 1::2] += boxes[:, 1::2] + padding[1][0]  # 宽度padding
+    boxes[:, 1::2] += padding[1][0]  # 宽度padding
     return boxes
 
 

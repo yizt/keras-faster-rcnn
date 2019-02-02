@@ -6,34 +6,32 @@ Created on 2018/12/4 10:46
 损失函数层
 """
 import tensorflow as tf
+from faster_rcnn.utils import tf_utils
 
 
 def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     """
     rpn分类损失
-    :param predict_cls_ids: 预测的anchors类别，(batch_num,anchors_num,2)
-    :param true_cls_ids:实际的anchors类别，(batch_num,rpn_train_anchors,2)
+    :param predict_cls_ids: 预测的anchors类别，(batch_num,anchors_num,2) fg or bg
+    :param true_cls_ids:实际的anchors类别，(batch_num,rpn_train_anchors,(class_id,tag))
+             tag 1：正样本，0：负样本，-1 padding
     :param indices: 正负样本索引，(batch_num,rpn_train_anchors,(idx,tag))，
              idx:指定anchor索引位置，tag 1：正样本，0：负样本，-1 padding
     :return:
     """
-    # 正负样本索引号
-    train_indices = tf.where(tf.not_equal(indices[:, :, -1], -1))
-    train_anchors = tf.gather_nd(indices, train_indices)  # (train_num,(idx,tag))
+    # 去除padding
+    train_indices = tf.where(tf.not_equal(indices[:, :, -1], 0))  # 0为padding
+    train_anchor_indices = tf.gather_nd(indices[..., 0], train_indices)  # 一维(batch*train_num,)，每个训练anchor的索引
+    true_cls_ids = tf.gather_nd(true_cls_ids[..., 0], train_indices)  # 一维(batch*train_num,)
+    # 转为onehot编码
+    true_cls_ids = tf.where(true_cls_ids >= 1, tf.ones_like(true_cls_ids), tf.zeros_like(true_cls_ids))  # 前景类都为1
+    true_cls_ids = tf.one_hot(true_cls_ids, depth=2)
     # batch索引
     batch_indices = train_indices[:, 0]  # 训练的第一维是batch索引
-    # 每个训练anchor的索引
-    train_anchor_indices = train_anchors[:, 0]  # 每个anchor的在所有anchors中的索引
     # 每个训练anchor的2维索引
     train_indices_2d = tf.stack([batch_indices, tf.cast(train_anchor_indices, dtype=tf.int64)], axis=1)
     # 获取预测的anchors类别
-    predict_cls_ids = tf.gather_nd(predict_cls_ids, train_indices_2d)  # (train_num,2)
-
-    # 真实的类别，打平前两维，batch和anchors打平
-    # shape = tf.shape(true_cls_ids)
-    # true_cls_ids = tf.reshape(true_cls_ids, [tf.reduce_prod(shape[:2]), shape[2]])
-    true_cls_ids_padding = tf.reduce_all(tf.equal(true_cls_ids, 0), axis=-1)
-    true_cls_ids = tf.boolean_mask(true_cls_ids, tf.logical_not(true_cls_ids_padding))
+    predict_cls_ids = tf.gather_nd(predict_cls_ids, train_indices_2d)  # (batch*train_num,2)
 
     # 交叉熵损失函数
     losses = tf.nn.softmax_cross_entropy_with_logits_v2(
@@ -57,29 +55,22 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     """
 
     :param predict_deltas: 预测的回归目标，(batch_num, anchors_num, 4)
-    :param deltas: 真实的回归目标，(batch_num, rpn_train_anchors, 4)
+    :param deltas: 真实的回归目标，(batch_num, rpn_train_anchors, 4+1), 最后一位为tag, tag=0 为padding
     :param indices: 正负样本索引，(batch_num, rpn_train_anchors, (idx,tag))，
-             idx:指定anchor索引位置，tag 1：正样本，0：负样本，-1 padding
+             idx:指定anchor索引位置，最后一位为tag, tag=0 为padding; 1为正样本，-1为负样本
     :return:
     """
-    train_postive_indices = tf.where(tf.equal(indices[:, :, -1], 1))
+    # 去除padding和负样本
+    positive_indices = tf.where(tf.equal(indices[:, :, -1], 1))
+    deltas = tf.gather_nd(deltas[..., :-1], positive_indices)  # (n,(dy,dx,dw,dh))
+    true_positive_indices = tf.gather_nd(indices[..., 0], positive_indices)  # 一维，正anchor索引
 
-    # 只有正样本做回归
-    train_anchors = tf.gather_nd(indices, train_postive_indices)  # (positive_num,(idx,tag))
     # batch索引
-    batch_indices = train_postive_indices[:, 0]
-    # anchor索引
-    true_postive_indices = train_anchors[:, 0]
+    batch_indices = positive_indices[:, 0]
     # 正样本anchor的2维索引
-    train_indices_2d = tf.stack([batch_indices, tf.cast(true_postive_indices, dtype=tf.int64)], axis=1)
+    train_indices_2d = tf.stack([batch_indices, tf.cast(true_positive_indices, dtype=tf.int64)], axis=1)
     # 正样本anchor预测的回归类型
     predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d, name='rpn_regress_loss_predict_deltas')
-    # 真实回归目标,去除padding,打平前两维
-    deltas_padding = tf.reduce_all(tf.equal(deltas, 0), axis=-1)  # 最后一维全为0，是padding
-    deltas = tf.boolean_mask(deltas, tf.logical_not(deltas_padding), name='rpn_regress_loss_deltas')
-    #
-    # shape = tf.shape(deltas)
-    # deltas = tf.reshape(deltas, [tf.reduce_prod(shape[:2]), shape[-1]])
 
     # Smooth-L1 # 非常重要，不然报NAN
     import keras.backend as K
@@ -88,3 +79,17 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
                     tf.constant(0.0))
     loss = K.mean(loss)
     return loss
+
+
+def main():
+    x = tf.constant([1, 3, 6, 2, 3, 1, 0])
+    x = tf.where(x >= 1, tf.ones_like(x), tf.zeros_like(x))
+    # tf.scatter_update(x, tf.where(x > 1), 1)
+    # x[x >= 1] = 1
+    y = tf.one_hot(x, depth=2)
+    sess = tf.Session()
+    print(sess.run(y))
+
+
+if __name__ == '__main__':
+    main()

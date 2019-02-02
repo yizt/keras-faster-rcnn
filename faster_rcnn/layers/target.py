@@ -78,19 +78,18 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     """
     处理单个图像的rpn分类和回归目标
     :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=0 为padding
-    :param gt_cls: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=0 为padding
+    :param gt_cls: GT 类别 [MAX_GT_BOXs, 1+1] ;最后一位为tag, tag=0 为padding
     :param anchors: [anchor_num, (y1,x1,y2,x2)]
     :param rpn_train_anchors: 训练样本数(256)
     :return:
-    class_ids:[rpn_train_anchors,num_class]: anchor边框分类
-    deltas:[rpn_train_anchors,(dy,dx,dh,dw)]：anchor边框回归目标
-    indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为负样本，tag=-1为padding
+    deltas:[rpn_train_anchors,(dy,dx,dh,dw,tag)]：anchor边框回归目标,tag=1 为正样本，tag=0为padding，tag=-1为负样本
+    class_ids:[rpn_train_anchors,1+1]: anchor边框分类,tag=1 为正样本，tag=0为padding，tag=-1为负样本
+    indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为padding，tag=-1为负样本
     """
 
-    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], 0), name='rpn_target_gt_indices')
     # 获取真正的GT,去除标签位
-    gt_boxes = tf.gather_nd(gt_boxes, gt_indices, name='rpn_target_gt_boxes')[:, :-1]
-    gt_cls = tf.gather_nd(gt_cls, gt_indices, name='rpn_target_gt_cls')[:, :-1]
+    gt_boxes = tf_utils.remove_pad(gt_boxes)
+    gt_cls = tf_utils.remove_pad(gt_cls)[:, 0]  # [N,1]转[N]
 
     # 计算IoU
     iou = compute_iou(gt_boxes, anchors)
@@ -119,47 +118,44 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     positive_indices = tf.random_shuffle(positive_indices)[:positive_num]
     positive_anchors = tf.gather_nd(anchors, positive_indices)
 
+    # 找到正样本对应的GT boxes
+    anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
+    positive_gt_indices = tf.gather_nd(anchors_iou_argmax, positive_indices)
+    # positive_gt_indices是一维的，使用gather
+    positive_gt_boxes = tf.gather(gt_boxes, positive_gt_indices)
+    positive_gt_cls = tf.gather(gt_cls, positive_gt_indices)
+
+    # 回归目标计算
+    deltas = regress_target(positive_anchors, positive_gt_boxes)
+
     # 负样本
     negative_num = tf.minimum(rpn_train_anchors - positive_num,
                               tf.shape(negative_indices)[0], name='rpn_target_negative_num')
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
-    # negative_anchors = tf.gather_nd(anchors, negative_indices)
+    negative_gt_cls = tf.zeros([negative_num])  # 负样本类别id为0
+    negative_deltas = tf.zeros([negative_num, 4])
 
-    # 找到正样本对应的GT boxes
-    anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
-    positive_gt_indices = tf.gather_nd(anchors_iou_argmax, positive_indices)
-    # gt_cls，gt_boxes是二维的，使用gather
-    positive_gt_boxes = tf.gather(gt_boxes, positive_gt_indices)
-    positive_gt_cls = tf.gather(gt_cls, positive_gt_indices)
-
-    # 回归目标
-    deltas = regress_target(positive_anchors, positive_gt_boxes)
+    # 合并正负样本
+    deltas = tf.concat([deltas, negative_deltas], axis=0, name='rpn_target_deltas')
+    class_ids = tf.concat([positive_gt_cls, negative_gt_cls], axis=0, name='rpn_target_class_ids')
+    indices = tf.concat([positive_indices, negative_indices], axis=0, name='rpn_train_anchor_indices')
 
     # 计算padding
     pad_num = tf.maximum(0, rpn_train_anchors - positive_num - negative_num)
-    # 分类正负样本
-    negative_gt_cls = tf.stack([tf.ones([negative_num]),
-                                tf.zeros([negative_num])], axis=1)  # 负样本稀疏编码[1,0]
-    class_ids = tf.concat([positive_gt_cls, negative_gt_cls], axis=0)
-    class_ids = tf.pad(class_ids, [[0, pad_num], [0, 0]], name='rpn_target_class_ids')  # padding
-
-    deltas = tf.pad(deltas, [[0, negative_num + pad_num], [0, 0]], name='rpn_target_deltas')
-
-    # 处理索引,记录正负anchor索引位置，第二位为标志位1位前景、0为背景、-1位padding
-    positive_part = tf.stack([positive_indices[:, 0], tf.ones([positive_num], dtype=tf.int64)], axis=1)
-    negative_part = tf.stack([negative_indices[:, 0], tf.zeros([negative_num], dtype=tf.int64)], axis=1)
-    pad_part = tf.ones([pad_num, 2], dtype=tf.int64) * -1
-    indices = tf.concat([positive_part, negative_part, pad_part], axis=0, name='rpn_target_indices')
-
+    deltas, class_ids, indices = tf_utils.pad_list_to_fixed_size([deltas, tf.expand_dims(class_ids, 1), indices],
+                                                                 pad_num)
+    # 将负样本tag标志改为-1;方便后续处理;
+    deltas[positive_num:positive_num + negative_num, -1] = -1
+    class_ids[positive_num:positive_num + negative_num, -1] = -1
+    indices[positive_num:positive_num + negative_num, -1] = -1
     # 其它统计指标
     gt_num = tf.shape(gt_cls)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
 
-    return class_ids, deltas, indices, tf.cast(
+    return deltas, class_ids, indices, tf.cast(  # 用作度量的必须是浮点类型
         gt_num, dtype=tf.float32), tf.cast(
         positive_num, dtype=tf.float32), tf.cast(
         miss_match_gt_num, dtype=tf.float32)
-    # 用作度量的必须是浮点类型
 
 
 class RpnTarget(keras.layers.Layer):
@@ -220,7 +216,7 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     """
     每个图像生成检测网络的分类和回归目标
     :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=0 为padding
-    :param gt_class_ids: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=0 为padding
+    :param gt_class_ids: GT 类别 [MAX_GT_BOXs, 1+1] ;最后一位为tag, tag=0 为padding
     :param proposals: [N,(y1,x1,y2,x2,tag)] ,tag=0 为padding
     :param train_rois_per_image: 每张图像训练的proposal数量
     :param roi_positive_ratio: proposal正负样本比
@@ -228,7 +224,7 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     """
     # 去除padding
     gt_boxes = tf_utils.remove_pad(gt_boxes)
-    gt_class_ids = tf_utils.remove_pad(gt_class_ids)
+    gt_class_ids = tf_utils.remove_pad(gt_class_ids)[:, 0]  # 从[N,1]变为[N]
     proposals = tf_utils.remove_pad(proposals)
     # 计算iou
     iou = compute_iou(gt_boxes, proposals)
@@ -262,14 +258,17 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
 
     # 合并两部分正样本
     gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
-    gt_class_ids_pos = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
+    class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
     proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=[0])
+
+    # 计算回归目标
+    deltas = regress_target(proposal_pos, gt_boxes_pos)
 
     # 根据正负样本比确定最终的正样本
     positive_num = tf.minimum(tf.shape[proposal_pos][0], int(train_rois_per_image * roi_positive_ratio))
-    gt_boxes_pos, gt_class_ids_pos, proposal_pos = shuffle_sample([gt_boxes_pos, gt_class_ids_pos, proposal_pos],
-                                                                  tf.shape[proposal_pos][0],
-                                                                  positive_num)
+    deltas, class_ids, proposal_pos = shuffle_sample([deltas, class_ids, proposal_pos],
+                                                     tf.shape[proposal_pos][0],
+                                                     positive_num)
 
     # 负样本：与所有GT的iou<0.5
     proposal_neg_idx = tf.where(proposal_iou_max < 0.5)
@@ -277,19 +276,19 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
 
     negative_num = tf.minimum(train_rois_per_image - positive_num, tf.shape(proposal_neg)[0])
 
-    gt_class_ids_neg = tf.zeros(shape=[negative_num])  # 背景类，类别id为0
-    gt_boxes_neg = tf.zeros(shape=[negative_num, 4])
+    class_ids_neg = tf.zeros(shape=[negative_num])  # 背景类，类别id为0
+    deltas_neg = tf.zeros(shape=[negative_num, 4])
 
     # 合并正负样本
     train_rois = tf.concat([proposal_pos, proposal_neg], axis=0)
-    train_gt_boxes = tf.concat([gt_boxes_pos, gt_boxes_neg], axis=0)
-    train_gt_class_ids = tf.concat([gt_class_ids_pos, gt_class_ids_neg], axis=0)
+    deltas = tf.concat([deltas, deltas_neg], axis=0)
+    class_ids = tf.concat([class_ids, class_ids_neg], axis=0)
 
     # 计算padding
     pad_num = train_rois_per_image - positive_num - negative_num
-    train_gt_boxes, train_gt_class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
-        [train_gt_boxes, train_gt_class_ids, train_rois], pad_num)
-    return train_gt_boxes, train_gt_class_ids, train_rois
+    deltas, class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
+        [deltas, tf.expand_dims(class_ids, axis=1), train_rois], pad_num)  # class_ids分类扩一维
+    return deltas, class_ids, train_rois
 
 
 class DetectTarget(keras.layers.Layer):
@@ -297,9 +296,10 @@ class DetectTarget(keras.layers.Layer):
     检测网络分类和回归目标;同时还要过滤训练的proposals
     """
 
-    def __init__(self, batch_size, train_rois_per_image, **kwargs):
+    def __init__(self, batch_size, train_rois_per_image=200, roi_positive_ratio=0.33, **kwargs):
         self.batch_size = batch_size
         self.train_rois_per_image = train_rois_per_image
+        self.roi_positive_ratio = roi_positive_ratio
         super(DetectTarget, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
@@ -310,16 +310,25 @@ class DetectTarget(keras.layers.Layer):
         inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=0 为padding
         inputs[2]: proposals [batch_size, N,(y1,x1,y2,x2)]
         :param kwargs:
-        :return:
+        :return: [deltas,class_ids,rois]
         """
         gt_boxes = inputs[0]
         gt_class_ids = inputs[1]
         proposals = inputs[2]
 
-        #
+        outputs = tf_utils.batch_slice([gt_boxes, gt_class_ids, proposals],
+                                       lambda x, y, z: detect_targets_graph(x, y, z, self.train_rois_per_image,
+                                                                            self.roi_positive_ratio),
+                                       self.batch_size)
+        return outputs
+
+    def compute_output_shape(self, input_shape):
+        return [(input_shape[0][0], self.train_rois_per_image, 4 + 1),  # deltas
+                (input_shape[0][0], self.train_rois_per_image, 1 + 1),  # class_ids
+                (input_shape[0][0], self.train_rois_per_image, 4 + 1)]  # rois
 
 
-if __name__ == '__main__':
+def main():
     sess = tf.Session()
     # a = tf.constant([[1, 2, 4, 6], [1, 2, 4, 6], [2, 2, 4, 6]], dtype=tf.float32)
     # b = tf.constant([[2, 2, 4, 6], [2, 3, 4, 6]], dtype=tf.float32)
@@ -332,3 +341,7 @@ if __name__ == '__main__':
     diff = tf.setdiff1d(x, y)
     print(sess.run(diff[0]))
     print(sess.run(tf.unique(y)))
+
+
+if __name__ == '__main__':
+    main()
