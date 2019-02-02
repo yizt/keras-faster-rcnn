@@ -77,8 +77,8 @@ def regress_target(anchors, gt_boxes):
 def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     """
     处理单个图像的rpn分类和回归目标
-    :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=-1 为padding
-    :param gt_cls: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=-1 为padding
+    :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=0 为padding
+    :param gt_cls: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=0 为padding
     :param anchors: [anchor_num, (y1,x1,y2,x2)]
     :param rpn_train_anchors: 训练样本数(256)
     :return:
@@ -87,7 +87,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     indices:[rpn_train_anchors,(indices,tag)]: tag=1 为正样本，tag=0为负样本，tag=-1为padding
     """
 
-    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], -1), name='rpn_target_gt_indices')
+    gt_indices = tf.where(tf.not_equal(gt_cls[:, -1], 0), name='rpn_target_gt_indices')
     # 获取真正的GT,去除标签位
     gt_boxes = tf.gather_nd(gt_boxes, gt_indices, name='rpn_target_gt_boxes')[:, :-1]
     gt_cls = tf.gather_nd(gt_cls, gt_indices, name='rpn_target_gt_cls')[:, :-1]
@@ -155,10 +155,11 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     gt_num = tf.shape(gt_cls)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
 
-    return class_ids, deltas, indices, tf.cast(gt_num, dtype=tf.float32), tf.cast(positive_num,
-                                                                                  dtype=tf.float32), tf.cast(
+    return class_ids, deltas, indices, tf.cast(
+        gt_num, dtype=tf.float32), tf.cast(
+        positive_num, dtype=tf.float32), tf.cast(
         miss_match_gt_num, dtype=tf.float32)
-    # positive_num, miss_match_gt_num
+    # 用作度量的必须是浮点类型
 
 
 class RpnTarget(keras.layers.Layer):
@@ -203,121 +204,131 @@ class RpnTarget(keras.layers.Layer):
                 (input_shape[0][0],)]
 
 
-def apply_regress(deltas, anchors):
+def shuffle_sample(tensor_list, tensor_size, sample_size):
     """
-    应用回归目标到边框
-    :param deltas: 回归目标[N,(dy, dx, dh, dw)]
-    :param anchors: anchor boxes[N,(y1,x1,y2,x2)]
+    对相关的tensor 列表随机协同采样
+    :param tensor_list:
+    :param tensor_size: tensor尺寸，即第一维大小
+    :param sample_size: 采样尺寸
     :return:
     """
-    # 高度和宽度
-    h = anchors[:, 2] - anchors[:, 0]
-    w = anchors[:, 3] - anchors[:, 1]
-
-    # 中心点坐标
-    cy = (anchors[:, 2] + anchors[:, 0]) * 0.5
-    cx = (anchors[:, 3] + anchors[:, 1]) * 0.5
-
-    # 回归系数
-    deltas *= tf.constant([0.1, 0.1, 0.2, 0.2])
-    dy, dx, dh, dw = deltas[:, 0], deltas[:, 1], deltas[:, 2], deltas[:, 3]
-
-    # 中心坐标回归
-    cy += dy * h
-    cx += dx * w
-    # 高度和宽度回归
-    h *= tf.exp(dh)
-    w *= tf.exp(dw)
-
-    # 转为y1,x1,y2,x2
-    y1 = cy - h * 0.5
-    x1 = cx - w * 0.5
-    y2 = cy + h * 0.5
-    x2 = cx + w * 0.5
-
-    return tf.stack([y1, x1, y2, x2], axis=1)
+    shuffle_indices = tf.range(tensor_size)[:sample_size]
+    return [tf.gather(tensor, shuffle_indices) for tensor in tensor_list]
 
 
-def nms(boxes, scores, max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
+def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image, roi_positive_ratio):
     """
-    非极大抑制
-    :param boxes:
-    :param scores:
-    :param max_output_size:
-    :param iou_threshold:
-    :param score_threshold:
-    :param name:
-    :return: 检测边框、边框得分
+    每个图像生成检测网络的分类和回归目标
+    :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=0 为padding
+    :param gt_class_ids: GT 类别 [MAX_GT_BOXs, num_class+1] ;最后一位为tag, tag=0 为padding
+    :param proposals: [N,(y1,x1,y2,x2,tag)] ,tag=0 为padding
+    :param train_rois_per_image: 每张图像训练的proposal数量
+    :param roi_positive_ratio: proposal正负样本比
+    :return:
     """
-    indices = tf.image.non_max_suppression(boxes, scores, max_output_size, iou_threshold, score_threshold, name)  # 一维索引
-    output_boxes = tf.gather(boxes, indices)  # (M,4)
-    class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
-    # padding到固定大小
-    return tf_utils.pad_to_fixed_size(output_boxes, max_output_size), \
-           tf_utils.pad_to_fixed_size(class_scores, max_output_size)
+    # 去除padding
+    gt_boxes = tf_utils.remove_pad(gt_boxes)
+    gt_class_ids = tf_utils.remove_pad(gt_class_ids)
+    proposals = tf_utils.remove_pad(proposals)
+    # 计算iou
+    iou = compute_iou(gt_boxes, proposals)
+
+    # 每个GT边框IoU最大的proposal为正
+    gt_iou_argmax = tf.argmax(iou, axis=1)
+
+    # GT和对应的proposal
+    gt_boxes_pos_1 = tf.identity(gt_boxes)
+    gt_class_ids_pos_1 = tf.identity(gt_class_ids)
+    proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
+
+    # 在接下来的操作之前提出已经被选中的proposal
+    indices = tf.unique(gt_iou_argmax)[0]  # 被选中的索引
+    all_indices = tf.range(tf.shape[proposals][0])  # 所有的索引
+    remainder_indices = tf.setdiff1d(all_indices, indices)[0]  # 剩余的索引
+    # 剩余的proposals和iou
+    proposals = tf.gather(proposals, remainder_indices)
+    iou = tf.gather(iou, remainder_indices, axis=1)
+
+    # 正样本每个proposal 最大的iou,且iou>=0.5
+    proposal_iou_max = tf.reduce_max(iou, axis=0)
+    proposal_pos_idx = tf.where(proposal_iou_max >= 0.5)  # 正样本proposal对应的索引号,二维
+
+    proposal_iou_argmax = tf.argmax(iou, axis=0)
+    gt_pos_idx = tf.gather_nd(proposal_iou_argmax, proposal_pos_idx)  # 对应的GT 索引号，一维的
+
+    gt_boxes_pos_2 = tf.gather(gt_boxes, gt_pos_idx)
+    gt_class_ids_pos_2 = tf.gather(gt_class_ids, gt_pos_idx)
+    proposal_pos_2 = tf.gather_nd(proposals, proposal_pos_idx)
+
+    # 合并两部分正样本
+    gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
+    gt_class_ids_pos = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
+    proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=[0])
+
+    # 根据正负样本比确定最终的正样本
+    positive_num = tf.minimum(tf.shape[proposal_pos][0], int(train_rois_per_image * roi_positive_ratio))
+    gt_boxes_pos, gt_class_ids_pos, proposal_pos = shuffle_sample([gt_boxes_pos, gt_class_ids_pos, proposal_pos],
+                                                                  tf.shape[proposal_pos][0],
+                                                                  positive_num)
+
+    # 负样本：与所有GT的iou<0.5
+    proposal_neg_idx = tf.where(proposal_iou_max < 0.5)
+    proposal_neg = tf.gather_nd(proposals, proposal_neg_idx)
+
+    negative_num = tf.minimum(train_rois_per_image - positive_num, tf.shape(proposal_neg)[0])
+
+    gt_class_ids_neg = tf.zeros(shape=[negative_num])  # 背景类，类别id为0
+    gt_boxes_neg = tf.zeros(shape=[negative_num, 4])
+
+    # 合并正负样本
+    train_rois = tf.concat([proposal_pos, proposal_neg], axis=0)
+    train_gt_boxes = tf.concat([gt_boxes_pos, gt_boxes_neg], axis=0)
+    train_gt_class_ids = tf.concat([gt_class_ids_pos, gt_class_ids_neg], axis=0)
+
+    # 计算padding
+    pad_num = train_rois_per_image - positive_num - negative_num
+    train_gt_boxes, train_gt_class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
+        [train_gt_boxes, train_gt_class_ids, train_rois], pad_num)
+    return train_gt_boxes, train_gt_class_ids, train_rois
 
 
-class RpnToProposal(keras.layers.Layer):
+class DetectTarget(keras.layers.Layer):
     """
-    生成候选框
+    检测网络分类和回归目标;同时还要过滤训练的proposals
     """
 
-    def __init__(self, batch_size, score_threshold=0.05, output_box_num=300, iou_threshold=0.5, **kwargs):
-        """
-
-        :param batch_size: batch_size
-        :param score_threshold: 分数阈值
-        :param output_box_num: 生成proposal 边框数量
-        :param iou_threshold: nms iou阈值
-        """
+    def __init__(self, batch_size, train_rois_per_image, **kwargs):
         self.batch_size = batch_size
-        self.score_threshold = score_threshold
-        self.output_box_num = output_box_num
-        self.iou_threshold = iou_threshold
-        super(RpnToProposal, self).__init__(**kwargs)
+        self.train_rois_per_image = train_rois_per_image
+        super(DetectTarget, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
         """
-        应用边框回归，并使用nms生成最后的边框
+        计算检测分类和回归目标
         :param inputs:
-        inputs[0]: deltas, [N,(dy,dx,dh,dw)]
-        inputs[1]: class logits [N,num_classes]
-        inputs[2]: anchors [N,(y1,x1,y2,x2)]
+        inputs[0]: GT 边框坐标 [batch_size, MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=0 为padding
+        inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=0 为padding
+        inputs[2]: proposals [batch_size, N,(y1,x1,y2,x2)]
         :param kwargs:
         :return:
         """
-        deltas = inputs[0]
-        class_logits = inputs[1]
-        anchors = inputs[2]
-        # 转为分类评分
-        class_scores = tf.nn.softmax(logits=class_logits, axis=-1)[..., -1]  # 最后一类为前景 (N,)
+        gt_boxes = inputs[0]
+        gt_class_ids = inputs[1]
+        proposals = inputs[2]
 
-        # 应用边框回归
-        proposals = tf_utils.batch_slice([deltas, anchors], lambda x, y: apply_regress(x, y), self.batch_size)
-
-        # # 非极大抑制
-        outputs = tf_utils.batch_slice([proposals, class_scores],
-                                       lambda x, y: nms(x, y,
-                                                        max_output_size=self.output_box_num,
-                                                        iou_threshold=self.iou_threshold,
-                                                        score_threshold=self.score_threshold),
-                                       self.batch_size)
-        return outputs
-
-    def compute_output_shape(self, input_shape):
-        """
-        注意多输出，call返回值必须是列表
-        :param input_shape:
-        :return:
-        """
-        return [(input_shape[0][0], self.output_box_num, 4 + 1),
-                (input_shape[0][0], self.output_box_num, 1 + 1)]
+        #
 
 
 if __name__ == '__main__':
     sess = tf.Session()
-    a = tf.constant([[1, 2, 4, 6], [1, 2, 4, 6], [2, 2, 4, 6]], dtype=tf.float32)
-    b = tf.constant([[2, 2, 4, 6], [2, 3, 4, 6]], dtype=tf.float32)
-    iou = compute_iou(a, b)
-    print(sess.run(iou))
-    print(sess.run(tf.nn.softmax(b, axis=-1)))
+    # a = tf.constant([[1, 2, 4, 6], [1, 2, 4, 6], [2, 2, 4, 6]], dtype=tf.float32)
+    # b = tf.constant([[2, 2, 4, 6], [2, 3, 4, 6]], dtype=tf.float32)
+    # iou = compute_iou(a, b)
+    # print(sess.run(iou))
+    # print(sess.run(tf.nn.softmax(b, axis=-1)))
+
+    x = tf.range(10)
+    y = tf.constant([3, 2, 1])
+    diff = tf.setdiff1d(x, y)
+    print(sess.run(diff[0]))
+    print(sess.run(tf.unique(y)))
