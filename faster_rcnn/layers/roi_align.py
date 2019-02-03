@@ -14,9 +14,9 @@ class RoiAlign(layers.Layer):
     将proposal边框投影到最后一层feature map上，并池化为7*7
     """
 
-    def __init__(self, pool_size=(7, 7), max_proposal_num=2000, **kwargs):
+    def __init__(self, image_max_dim, pool_size=(7, 7), **kwargs):
         self.pool_size = pool_size
-        self.max_proposal_num = max_proposal_num
+        self.image_max_dim = image_max_dim
         super(RoiAlign, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
@@ -24,12 +24,14 @@ class RoiAlign(layers.Layer):
 
         :param inputs:
         inputs[0]: feature maps  [batch_num,H,W,feature_channel_num]
-        inputs[1]: rois   [batch_num,roi_num,(y1,x1,y2,x2)] , 训练和测试时，roi_num不同
+        inputs[1]: rois   [batch_num,roi_num,(y1,x1,y2,x2,tag)] , 训练和测试时，roi_num不同
         :param kwargs:
         :return:
         """
         features = inputs[0]
-        rois = inputs[1]
+        rois = inputs[1][..., :-1]  # 去除tag列
+        # 坐标归一化
+        rois /= tf.constant(self.image_max_dim)
         # 生成batch index
         batch_size, roi_num = tf.shape(rois)[:2]
         batch_index = tf.expand_dims(tf.range(batch_size), axis=1)

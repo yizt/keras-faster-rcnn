@@ -310,8 +310,8 @@ class DetectTarget(keras.layers.Layer):
         计算检测分类和回归目标
         :param inputs:
         inputs[0]: GT 边框坐标 [batch_size, MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=0 为padding
-        inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,num_class+1] ;最后一位为tag, tag=0 为padding
-        inputs[2]: proposals [batch_size, N,(y1,x1,y2,x2)]
+        inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,1+1] ;最后一位为tag, tag=0 为padding
+        inputs[2]: proposals [batch_size, N,(y1,x1,y2,x2,tag)]
         :param kwargs:
         :return: [deltas,class_ids,rois]
         """

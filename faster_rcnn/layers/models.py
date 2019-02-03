@@ -10,12 +10,14 @@ frcnn模型
 import keras
 from keras import layers
 from keras.models import Model
-from keras.layers import Input, Lambda, Conv2D, Reshape
+from keras.layers import Input, Lambda, Conv2D, Reshape, TimeDistributed
 import tensorflow as tf
 
 from keras_applications.resnet50 import identity_block, conv_block
 from faster_rcnn.layers.anchors import Anchor
-from faster_rcnn.layers.target import RpnTarget, RpnToProposal
+from faster_rcnn.layers.target import RpnTarget, DetectTarget
+from faster_rcnn.layers.proposals import RpnToProposal
+from faster_rcnn.layers.roi_align import RoiAlign
 from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss
 
 
@@ -132,6 +134,34 @@ def rpn(base_layers, num_anchors):
     return x_regr, x_class
 
 
+def classifer(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
+    x = RoiAlign(image_max_dim)([base_layers, rois])  #
+    # 用卷积来实现两个全连接
+    x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'))(x)  # 变为(batch_size,roi_num,1,1,channels)
+    x = TimeDistributed(layers.BatchNormalization())(x)
+    x = layers.Activation(activation='relu')(x)
+
+    x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'))(x)
+    x = TimeDistributed(layers.BatchNormalization())(x)
+    x = layers.Activation(activation='relu')(x)
+
+    # 收缩维度
+    shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
+
+    # 分类
+    class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear'))(shared_layer)
+
+    # 回归(类别相关)
+    deltas = TimeDistributed(layers.Dense(4 * num_classes, activation='linear'))(
+        shared_layer)  # shape (batch_size,roi_num,4*num_classes)
+
+    # 变为(batch_size,roi_num,num_classes,4)
+    roi_num = tf.shape(deltas)[1]
+    deltas = layers.Reshape((roi_num, num_classes, 4))(deltas)
+
+    return deltas, class_logits
+
+
 def resnet50(input):
     # Determine proper input shape
     bn_axis = 3
@@ -183,9 +213,16 @@ def resnet_test_net(input):
     return x
 
 
+def main():
+    # print(keras.backend.image_data_format())
+    # model = resnet50(Input((224, 224, 3)))
+    # model.summary()
+    x = tf.ones(shape=(5, 4, 1, 1, 3))
+    import keras.backend as K
+    y = tf.squeeze(x, 3)
+    sess = tf.Session()
+    print(sess.run(y))
+
+
 if __name__ == '__main__':
-    print(keras.backend.image_data_format())
-    model = resnet50(Input((224, 224, 3)))
-    model.summary()
-    # from keras_applications.resnet50 import ResNet50
-    # m= ResNet50(True,weights='',input_shape=(224,224,3))
+    main()
