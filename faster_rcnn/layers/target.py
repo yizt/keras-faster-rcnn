@@ -141,13 +141,10 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     indices = tf.concat([positive_indices, negative_indices], axis=0, name='rpn_train_anchor_indices')
 
     # 计算padding
-    pad_num = tf.maximum(0, rpn_train_anchors - positive_num - negative_num)
-    deltas, class_ids, indices = tf_utils.pad_list_to_fixed_size([deltas, tf.expand_dims(class_ids, 1), indices],
-                                                                 pad_num)
+    deltas, class_ids = tf_utils.pad_list_to_fixed_size([deltas, tf.expand_dims(class_ids, 1)],
+                                                        rpn_train_anchors)
     # 将负样本tag标志改为-1;方便后续处理;
-    deltas[positive_num:positive_num + negative_num, -1] = -1
-    class_ids[positive_num:positive_num + negative_num, -1] = -1
-    indices[positive_num:positive_num + negative_num, -1] = -1
+    indices = tf_utils.pad_to_fixed_size_with_negative(indices, rpn_train_anchors, negative_num=negative_num)
     # 其它统计指标
     gt_num = tf.shape(gt_cls)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
@@ -285,12 +282,11 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     class_ids = tf.concat([class_ids, class_ids_neg], axis=0)
 
     # 计算padding
-    pad_num = train_rois_per_image - positive_num - negative_num
     deltas, class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
-        [deltas, tf.expand_dims(class_ids, axis=1), train_rois], pad_num)  # class_ids分类扩一维
+        [deltas, tf.expand_dims(class_ids, axis=1), train_rois], train_rois_per_image)  # class_ids分类扩一维
     # 为后续处理方便负样本tag设置为-1
-    deltas[positive_num:positive_num + negative_num, -1] = -1
-
+    tf.assign(deltas[positive_num:positive_num + negative_num, -1], -1, name='assign_negative_roi_tag')
+    deltas = tf_utils.pad_to_fixed_size_with_negative(deltas, train_rois_per_image, negative_num)
     return deltas, class_ids, train_rois
 
 
@@ -339,11 +335,20 @@ def main():
     # print(sess.run(iou))
     # print(sess.run(tf.nn.softmax(b, axis=-1)))
 
-    x = tf.range(10)
-    y = tf.constant([3, 2, 1])
-    diff = tf.setdiff1d(x, y)
-    print(sess.run(diff[0]))
-    print(sess.run(tf.unique(y)))
+    # x = tf.range(10)
+    # y = tf.constant([3, 2, 1])
+    # diff = tf.setdiff1d(x, y)
+    # print(sess.run(diff[0]))
+    # print(sess.run(tf.unique(y)))
+    x = tf.Variable(tf.ones((3, 4, 5)))
+    y = x[1]
+    sess.run(tf.global_variables_initializer())
+
+    with tf.control_dependencies([tf.assign(y, tf.zeros((4, 5)))]):
+        sess.run(tf.identity(y))
+        print(sess.run(x))
+        print(sess.run(y))
+        tf.scatter_update
 
 
 if __name__ == '__main__':

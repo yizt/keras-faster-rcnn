@@ -5,14 +5,13 @@ Created on 2018/11/13 10:11
 @author: mick.yi
 
 """
-import tensorflow as tf
+from distutils.version import LooseVersion
+
 import numpy as np
 import numpy.random as random
-import shutil
-import warnings
 import skimage
+import tensorflow as tf
 from skimage import transform
-from distutils.version import LooseVersion
 
 
 # ## Batch Slicing
@@ -222,15 +221,32 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
             preserve_range=preserve_range)
 
 
-def pad_to_fixed_size(input_tensor, fixed_size):
+def pad_to_fixed_size_with_negative(input_tensor, fixed_size, negative_num):
+    input_size = tf.shape(input_tensor)[0]
+    # tag 列 padding
+    positive_num = input_size - negative_num
+    column_padding = tf.concat([tf.ones([positive_num], dtype=tf.int64),
+                                tf.ones([negative_num], dtype=tf.int64) * -1],
+                               axis=0)
+    x = tf.concat([input_tensor, tf.expand_dims(column_padding, axis=1)], axis=1)
+    # 行padding
+    padding_size = tf.maximum(0, fixed_size - input_size)
+    x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
+    return x
+
+
+def pad_to_fixed_size(input_tensor, fixed_size, negative_num=0):
     """
     增加padding到固定尺寸,在第二维增加一个标志位,0-padding,1-非padding
     :param input_tensor: 二维张量
     :param fixed_size:
+    :param negative_num: 负样本数量
     :return:
     """
+    input_size = tf.shape(input_tensor)[0]
     x = tf.pad(input_tensor, [[0, 0], [0, 1]], mode='CONSTANT', constant_values=1)
-    padding_size = tf.maximum(0, fixed_size - tf.shape(x)[0])
+    # padding
+    padding_size = tf.maximum(0, fixed_size - input_size)
     x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
     return x
 
