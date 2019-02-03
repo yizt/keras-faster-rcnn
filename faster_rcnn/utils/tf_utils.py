@@ -248,7 +248,7 @@ def pad_to_fixed_size(input_tensor, fixed_size, negative_num=0):
     x = tf.pad(input_tensor, [[0, 0], [0, 1]], mode='CONSTANT', constant_values=1)
     # padding
     padding_size = tf.maximum(0, fixed_size - input_size)
-    x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
+    x = tf.pad(x[:fixed_size], [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
     return x
 
 
