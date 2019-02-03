@@ -23,7 +23,9 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     train_anchor_indices = tf.gather_nd(indices[..., 0], train_indices)  # 一维(batch*train_num,)，每个训练anchor的索引
     true_cls_ids = tf.gather_nd(true_cls_ids[..., 0], train_indices)  # 一维(batch*train_num,)
     # 转为onehot编码
-    true_cls_ids = tf.where(true_cls_ids >= 1, tf.ones_like(true_cls_ids), tf.zeros_like(true_cls_ids))  # 前景类都为1
+    true_cls_ids = tf.where(true_cls_ids >= 1,
+                            tf.ones_like(true_cls_ids, dtype=tf.uint8),
+                            tf.zeros_like(true_cls_ids, dtype=tf.uint8))  # 前景类都为1
     true_cls_ids = tf.one_hot(true_cls_ids, depth=2)
     # batch索引
     batch_indices = train_indices[:, 0]  # 训练的第一维是batch索引
@@ -80,16 +82,6 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     return loss
 
 
-def main():
-    x = tf.constant([1, 3, 6, 2, 3, 1, 0])
-    x = tf.where(x >= 1, tf.ones_like(x), tf.zeros_like(x))
-    # tf.scatter_update(x, tf.where(x > 1), 1)
-    # x[x >= 1] = 1
-    y = tf.one_hot(x, depth=2)
-    sess = tf.Session()
-    print(sess.run(y))
-
-
 def detect_cls_loss(predict_cls_ids, true_cls_ids):
     """
     检测分类损失函数
@@ -134,6 +126,16 @@ def detect_regress_loss(predict_deltas, deltas, class_ids):
                     tf.constant(0.0))
     loss = K.mean(loss)
     return loss
+
+
+def main():
+    x = tf.constant([1, 3, 6, 2, 3, 1, 0], dtype=tf.uint8)
+    x = tf.where(x >= 1, tf.ones_like(x), tf.zeros_like(x))
+    # tf.scatter_update(x, tf.where(x > 1), 1)
+    # x[x >= 1] = 1
+    y = tf.one_hot(x, depth=2)
+    sess = tf.Session()
+    print(sess.run(y))
 
 
 if __name__ == '__main__':

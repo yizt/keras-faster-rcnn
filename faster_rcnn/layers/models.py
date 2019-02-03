@@ -35,8 +35,9 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
 
     if stage == 'train':
         # 生成分类和回归目标
-        deltas, cls_ids, anchor_indices = RpnTarget(batch_size, 256, name='rpn_target')(
-            [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices]
+        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+            [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices,..]
+        deltas, cls_ids, anchor_indices = rpn_targets[:3]
         # 定义损失layer
         cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
             [class_logits, cls_ids, anchor_indices])
