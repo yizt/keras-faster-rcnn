@@ -62,7 +62,7 @@ def shift(shape, strides, base_anchors):
     :param base_anchors:所有的基准anchors，(anchor_num,4)
     :return:
     """
-    H, W = shape
+    H, W = shape[0], shape[1]
     print("shape:{}".format(shape))
     ctr_x = (tf.cast(tf.range(W), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
     ctr_y = (tf.cast(tf.range(H), tf.float32) + tf.constant(0.5, dtype=tf.float32)) * strides
