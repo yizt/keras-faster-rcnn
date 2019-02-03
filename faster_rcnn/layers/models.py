@@ -81,11 +81,12 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 应用分类和回归生成proposal
-        proposal_boxes, _ = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+        proposal_boxes, _ = RpnToProposal(batch_size, output_box_num=1000, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio)(
+        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio,
+                                                                name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, num_classes, image_max_dim, pool_size=(7, 7),
@@ -164,6 +165,10 @@ def compile(keras_model, config, learning_rate, momentum):
 
     keras_model.metrics_names.append('miss_match_gt_num')
     keras_model.metrics_tensors.append(layer.output[5])
+    # 检测结果统计指标
+    layer = keras_model.get_layer('rcnn_target')
+    keras_model.metrics_names.append('rcnn_miss_match_gt_num')
+    keras_model.metrics_tensors.append(layer.output[3])
 
 
 #
