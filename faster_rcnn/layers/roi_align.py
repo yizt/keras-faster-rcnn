@@ -39,6 +39,10 @@ class RoiAlign(layers.Layer):
         batch_index = tf.reshape(batch_index, [-1])  # 类型[0,0,0,..,1,1,1...]
         # roi打平为二维
         rois = tf.reshape(rois, [-1, 4])
+
+        # 停止反向传播
+        rois = tf.stop_gradient(rois)
+        batch_index = tf.stop_gradient(batch_index)
         # RoiAlign
         output = tf.image.crop_and_resize(image=features,
                                           boxes=rois,
@@ -59,6 +63,8 @@ def main():
     y = tf.tile(x, [1, 3])
     sess = tf.Session()
     print(sess.run(tf.reshape(y, [-1])))
+    print(sess.run(x))
+    print(sess.run(x[:100]))
 
 
 if __name__ == '__main__':
