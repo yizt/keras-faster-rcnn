@@ -110,17 +110,22 @@ def detect_cls_loss(predict_cls_ids, true_cls_ids):
     return loss
 
 
-def detect_regress_loss(predict_deltas, deltas):
+def detect_regress_loss(predict_deltas, deltas, class_ids):
     """
-    检测网络回归损失
-    :param predict_deltas: 回归预测值 (batch_num, train_roi_num, (dy,dx,dh,dw)
-    :param deltas: 实际回归参数(batch_num, train_roi_num, (dy,dx,dh,dw,tag) ,tag：0-padding,-1-负样本,1-正样本
+    检测网络回归损失(类别相关)
+    :param predict_deltas: 回归预测值 (batch_num, train_roi_num, num_classes,(dy,dx,dh,dw))
+    :param deltas: 实际回归参数(batch_num, train_roi_num, (dy,dx,dh,dw,tag)) ,tag：0-padding,-1-负样本,1-正样本
+    :param class_ids: 实际类别(batch_num, train_roi_num, (class_id,tag)) ,tag：0-padding,-1-负样本,1-正样本
     :return:
     """
     # 去除padding和负样本，保留正样本
-    indices = tf.where(tf.equal(deltas[..., -1], 1))
-    predict_deltas = tf.gather_nd(predict_deltas, indices)
+    indices = tf.where(tf.equal(deltas[..., -1], 1))  # 二维的(N,2)
     deltas = tf.gather_nd(deltas[..., :-1], indices)
+    class_ids = tf.gather_nd(class_ids[..., :-1], indices)  # 二维的(N,1)
+
+    # 预测的回归参数索引位置(类别相关，还需要类别索引)
+    predict_indices = tf.concat([indices, class_ids], axis=[1])
+    predict_deltas = tf.gather_nd(predict_deltas, predict_indices)
 
     # Smooth-L1 # 非常重要，不然报NAN
     import keras.backend as K
