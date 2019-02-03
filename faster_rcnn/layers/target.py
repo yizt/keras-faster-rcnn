@@ -236,8 +236,8 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
 
     # 在接下来的操作之前提出已经被选中的proposal
     indices = tf.unique(gt_iou_argmax)[0]  # 被选中的索引
-    all_indices = tf.range(tf.shape[proposals][0])  # 所有的索引
-    remainder_indices = tf.setdiff1d(all_indices, indices)[0]  # 剩余的索引
+    all_indices = tf.range(tf.shape(proposals)[0])  # 所有的索引
+    remainder_indices = tf.setdiff1d(all_indices, tf.cast(indices, tf.int32))[0]  # 剩余的索引
     # 剩余的proposals和iou
     proposals = tf.gather(proposals, remainder_indices)
     iou = tf.gather(iou, remainder_indices, axis=1)
@@ -256,15 +256,15 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     # 合并两部分正样本
     gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
     class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
-    proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=[0])
+    proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
 
     # 计算回归目标
     deltas = regress_target(proposal_pos, gt_boxes_pos)
 
     # 根据正负样本比确定最终的正样本
-    positive_num = tf.minimum(tf.shape[proposal_pos][0], int(train_rois_per_image * roi_positive_ratio))
+    positive_num = tf.minimum(tf.shape(proposal_pos)[0], int(train_rois_per_image * roi_positive_ratio))
     deltas, class_ids, proposal_pos = shuffle_sample([deltas, class_ids, proposal_pos],
-                                                     tf.shape[proposal_pos][0],
+                                                     tf.shape(proposal_pos)[0],
                                                      positive_num)
 
     # 负样本：与所有GT的iou<0.5
@@ -282,10 +282,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     class_ids = tf.concat([class_ids, class_ids_neg], axis=0)
 
     # 计算padding
-    deltas, class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
-        [deltas, tf.expand_dims(class_ids, axis=1), train_rois], train_rois_per_image)  # class_ids分类扩一维
+    class_ids, train_rois = tf_utils.pad_list_to_fixed_size(
+        [tf.expand_dims(class_ids, axis=1), train_rois], train_rois_per_image)  # class_ids分类扩一维
     # 为后续处理方便负样本tag设置为-1
-    tf.assign(deltas[positive_num:positive_num + negative_num, -1], -1, name='assign_negative_roi_tag')
     deltas = tf_utils.pad_to_fixed_size_with_negative(deltas, train_rois_per_image, negative_num)
     return deltas, class_ids, train_rois
 
@@ -306,7 +305,7 @@ class DetectTarget(keras.layers.Layer):
         计算检测分类和回归目标
         :param inputs:
         inputs[0]: GT 边框坐标 [batch_size, MAX_GT_BOXs,(y1,x1,y2,x2,tag)] ,tag=0 为padding
-        inputs[1]: GT 类别 [batch_size, MAX_GT_BOXs,1+1] ;最后一位为tag, tag=0 为padding
+        inputs[1]: GT 边框 类别 [batch_size, MAX_GT_BOXs,1+1] ;最后一位为tag, tag=0 为padding
         inputs[2]: proposals [batch_size, N,(y1,x1,y2,x2,tag)]
         :param kwargs:
         :return: [deltas,class_ids,rois]

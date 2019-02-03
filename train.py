@@ -14,7 +14,8 @@ from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.pascal_voc import get_voc_data
 from faster_rcnn.utils.image import load_image_gt
 from faster_rcnn.utils.np_utils import pad_to_fixed_size
-from faster_rcnn.layers.models import rpn_net, compile
+from faster_rcnn.layers import models
+from faster_rcnn.layers.models import compile
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
 
@@ -78,7 +79,9 @@ if __name__ == '__main__':
     # voc_path = '/opt/dataset/VOCdevkit'
     all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path)
     print("all_img_info:{}".format(len(all_img_info)))
-    m = rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
+    # m = rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
+    m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
+                     50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
     m.load_weights(config.pretrained_weights, by_name=True)
     # m.load_weights('resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5', by_name=True)
     compile(m, config, 1e-4, 0.9)

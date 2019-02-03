@@ -16,7 +16,7 @@ from faster_rcnn.layers.anchors import Anchor
 from faster_rcnn.layers.target import RpnTarget, DetectTarget
 from faster_rcnn.layers.proposals import RpnToProposal
 from faster_rcnn.layers.roi_align import RoiAlign
-from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss
+from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss, detect_regress_loss, detect_cls_loss
 
 
 def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
@@ -54,6 +54,59 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
                      outputs=[detect_boxes, class_scores])
 
 
+def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train_rois_per_image, roi_positive_ratio,
+          stage='train'):
+    input_image = Input(shape=image_shape)
+    gt_class_ids = Input(shape=(max_gt_num, 1 + 1))
+    gt_boxes = Input(shape=(max_gt_num, 4 + 1))
+    input_image_meta = Input(shape=(12,))
+    # 特征及预测结果
+    features = resnet50(input_image)
+    # features = resnet_test_net(input_image)
+    boxes_regress, class_logits = rpn(features, 9)
+
+    # 生成anchor
+    anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
+                     16, name='gen_anchors')([features, input_image_meta])
+
+    if stage == 'train':
+        # 生成分类和回归目标
+        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+            [gt_boxes, gt_class_ids, anchors])  # [deltas,cls_ids,indices,..]
+        rpn_deltas, rpn_cls_ids, anchor_indices = rpn_targets[:3]
+        # 定义rpn损失layer
+        cls_loss_rpn = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
+            [class_logits, rpn_cls_ids, anchor_indices])
+        regress_loss_rpn = Lambda(lambda x: rpn_regress_loss(*x), name='rpn_bbox_loss')(
+            [boxes_regress, rpn_deltas, anchor_indices])
+
+        # 应用分类和回归生成proposal
+        proposal_boxes, _ = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+            [boxes_regress, class_logits, anchors])
+
+        # 检测网络的分类和回归目标
+        roi_deltas, roi_class_ids, train_rois = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio)(
+            [gt_boxes, gt_class_ids, proposal_boxes])
+        # 检测网络
+        rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, num_classes, image_max_dim, pool_size=(7, 7),
+                                              fc_layers_size=1024)
+
+        # 检测网络损失函数
+        regress_loss_rcnn = Lambda(lambda x: detect_regress_loss(*x), name='rcnn_bbox_loss')(
+            [rcnn_deltas, roi_deltas, roi_class_ids])
+        cls_loss_rcnn = Lambda(lambda x: detect_cls_loss(*x), name='rcnn_class_loss')(
+            [rcnn_class_logits, roi_class_ids])
+
+        return Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
+                     outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
+    else:  # 测试阶段
+        # 应用分类和回归
+        detect_boxes, class_scores = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+            [boxes_regress, class_logits, anchors])
+        return Model(inputs=[input_image, input_image_meta],
+                     outputs=[detect_boxes, class_scores])
+
+
 def compile(keras_model, config, learning_rate, momentum):
     """Gets the model ready for training. Adds losses, regularization, and
     metrics. Then calls the Keras compile() function.
@@ -66,10 +119,11 @@ def compile(keras_model, config, learning_rate, momentum):
     # First, clear previously set losses to avoid duplication
     keras_model._losses = []
     keras_model._per_input_losses = {}
-    loss_names = ["rpn_bbox_loss", "rpn_class_loss"]  # , "rpn_bbox_loss",rpn_class_loss
+    loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss",
+                  "rcnn_class_loss"]  # , "rpn_bbox_loss",rpn_class_loss
     for name in loss_names:
         layer = keras_model.get_layer(name)
-        if layer.output in keras_model.losses:
+        if layer.output in keras_model.losses or layer is None:
             continue
         loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
@@ -135,7 +189,7 @@ def rpn(base_layers, num_anchors):
     return x_regr, x_class
 
 
-def classifer(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
+def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
     x = RoiAlign(image_max_dim)([base_layers, rois])  #
     # 用卷积来实现两个全连接
     x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid', name='rcnn_fc1'))(
@@ -159,7 +213,7 @@ def classifer(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), f
         shared_layer)  # shape (batch_size,roi_num,4*num_classes)
 
     # 变为(batch_size,roi_num,num_classes,4)
-    roi_num = tf.shape(deltas)[1]
+    roi_num = backend.int_shape(deltas)[1]
     deltas = layers.Reshape((roi_num, num_classes, 4))(deltas)
 
     return deltas, class_logits

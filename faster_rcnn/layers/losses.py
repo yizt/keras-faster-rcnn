@@ -95,7 +95,7 @@ def detect_cls_loss(predict_cls_ids, true_cls_ids):
     true_cls_ids = tf.gather_nd(true_cls_ids[..., 0], indices)  # 一维，类别id
     # 真实类别转one hot编码
     num_classes = tf.shape(predict_cls_ids)[1]
-    true_cls_ids = tf.one_hot(true_cls_ids, depth=num_classes)
+    true_cls_ids = tf.one_hot(tf.cast(true_cls_ids, tf.int32), depth=num_classes)
 
     # 交叉熵损失函数
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_cls_ids, logits=predict_cls_ids)
@@ -116,7 +116,7 @@ def detect_regress_loss(predict_deltas, deltas, class_ids):
     class_ids = tf.gather_nd(class_ids[..., :-1], indices)  # 二维的(N,1)
 
     # 预测的回归参数索引位置(类别相关，还需要类别索引)
-    predict_indices = tf.concat([indices, class_ids], axis=[1])
+    predict_indices = tf.concat([indices, tf.cast(class_ids, tf.int64)], axis=1)
     predict_deltas = tf.gather_nd(predict_deltas, predict_indices)
 
     # Smooth-L1 # 非常重要，不然报NAN

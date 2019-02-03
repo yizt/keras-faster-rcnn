@@ -31,19 +31,22 @@ class RoiAlign(layers.Layer):
         features = inputs[0]
         rois = inputs[1][..., :-1]  # 去除tag列
         # 坐标归一化
-        rois /= tf.constant(self.image_max_dim)
+        rois /= tf.constant(self.image_max_dim, dtype=tf.float32)
         # 生成batch index
-        batch_size, roi_num = tf.shape(rois)[:2]
+        batch_size, roi_num = tf.shape(rois)[0], tf.shape(rois)[1]
         batch_index = tf.expand_dims(tf.range(batch_size), axis=1)
         batch_index = tf.tile(batch_index, [1, roi_num])
         batch_index = tf.reshape(batch_index, [-1])  # 类型[0,0,0,..,1,1,1...]
+        # roi打平为二维
+        rois = tf.reshape(rois, [-1, 4])
         # RoiAlign
         output = tf.image.crop_and_resize(image=features,
                                           boxes=rois,
                                           box_ind=batch_index,
                                           crop_size=self.pool_size)  # (batch_size*roi_num,h,w,channels)
+        # 转为(batch_size,roi_num,h,w,channels)
         shape = tf.shape(output)
-        output = tf.reshape(output, [batch_size, roi_num] + shape[1:])
+        output = tf.reshape(output, [batch_size, roi_num, shape[1], shape[2], shape[3]])
         return output
 
     def compute_output_shape(self, input_shape):
