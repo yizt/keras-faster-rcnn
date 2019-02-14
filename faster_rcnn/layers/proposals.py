@@ -45,23 +45,26 @@ def apply_regress(deltas, anchors):
     return tf.stack([y1, x1, y2, x2], axis=1)
 
 
-def nms(boxes, scores, max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
+def nms(boxes, scores, class_logits, max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
     """
     非极大抑制
-    :param boxes:
-    :param scores:
-    :param max_output_size:
-    :param iou_threshold:
-    :param score_threshold:
+    :param boxes: 形状为[num_boxes, 4]的二维浮点型Tensor.
+    :param scores: 形状为[num_boxes]的一维浮点型Tensor,表示与每个框(每行框)对应的单个分数.
+    :param class_logits: 形状为[num_boxes,num_classes] 原始的预测类别
+    :param max_output_size: 一个标量整数Tensor,表示通过非最大抑制选择的框的最大数量.
+    :param iou_threshold: 浮点数,IOU 阈值
+    :param score_threshold:  浮点数, 过滤低于阈值的边框
     :param name:
-    :return: 检测边框、边框得分
+    :return: 检测边框、边框得分、边框类别
     """
     indices = tf.image.non_max_suppression(boxes, scores, max_output_size, iou_threshold, score_threshold, name)  # 一维索引
     output_boxes = tf.gather(boxes, indices)  # (M,4)
     class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
+    class_logits = tf.gather(class_logits, indices)
     # padding到固定大小
     return tf_utils.pad_to_fixed_size(output_boxes, max_output_size), \
-           tf_utils.pad_to_fixed_size(class_scores, max_output_size)
+           tf_utils.pad_to_fixed_size(class_scores, max_output_size), \
+           tf_utils.pad_to_fixed_size(class_logits, max_output_size)
 
 
 class RpnToProposal(keras.layers.Layer):
@@ -87,9 +90,9 @@ class RpnToProposal(keras.layers.Layer):
         """
         应用边框回归，并使用nms生成最后的边框
         :param inputs:
-        inputs[0]: deltas, [N,(dy,dx,dh,dw)]
-        inputs[1]: class logits [N,num_classes]
-        inputs[2]: anchors [N,(y1,x1,y2,x2)]
+        inputs[0]: deltas, [batch_size,N,(dy,dx,dh,dw)]   N是所有的anchors数量
+        inputs[1]: class logits [batch_size,N,num_classes]
+        inputs[2]: anchors [batch_size,N,(y1,x1,y2,x2)]
         :param kwargs:
         :return:
         """
@@ -97,17 +100,18 @@ class RpnToProposal(keras.layers.Layer):
         class_logits = inputs[1]
         anchors = inputs[2]
         # 转为分类评分
-        class_scores = tf.nn.softmax(logits=class_logits, axis=-1)[..., -1]  # 最后一类为前景 (N,)
+        class_scores = tf.nn.softmax(logits=class_logits, axis=-1)  # [N,num_classes]
+        fg_scores = tf.reduce_max(class_scores[..., 1:], axis=-1)  # 第一类为背景 (N,)
 
         # 应用边框回归
         proposals = tf_utils.batch_slice([deltas, anchors], lambda x, y: apply_regress(x, y), self.batch_size)
 
         # # 非极大抑制
-        outputs = tf_utils.batch_slice([proposals, class_scores],
-                                       lambda x, y: nms(x, y,
-                                                        max_output_size=self.output_box_num,
-                                                        iou_threshold=self.iou_threshold,
-                                                        score_threshold=self.score_threshold),
+        outputs = tf_utils.batch_slice([proposals, fg_scores, class_logits],
+                                       lambda x, y, z: nms(x, y, z,
+                                                           max_output_size=self.output_box_num,
+                                                           iou_threshold=self.iou_threshold,
+                                                           score_threshold=self.score_threshold),
                                        self.batch_size)
         return outputs
 
@@ -118,4 +122,5 @@ class RpnToProposal(keras.layers.Layer):
         :return:
         """
         return [(input_shape[0][0], self.output_box_num, 4 + 1),
-                (input_shape[0][0], self.output_box_num, 1 + 1)]
+                (input_shape[0][0], self.output_box_num, 1 + 1),
+                (input_shape[0][0], self.output_box_num, input_shape[1][-1])]
