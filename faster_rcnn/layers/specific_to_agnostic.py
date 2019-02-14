@@ -6,6 +6,7 @@
    date：          2019/2/14
 """
 import tensorflow as tf
+from keras import backend
 
 
 def deal_delta(deltas, class_logits):
@@ -23,9 +24,9 @@ def deal_delta(deltas, class_logits):
     indices = tf.concat([pre_two_indices, third_indices], axis=1)
     # 获取对应类别的deltas
     deltas = tf.gather_nd(deltas, indices)  # [batch_size*proposals_num,(dy,dx,dh,dw)]
-    # 差分为三维返回
-    shape = tf.shape(class_logits)
-    return tf.reshape(deltas, shape=[shape[0], shape[1], 4])  # [batch_size,proposals_num,(dy,dx,dh,dw)]
+    # 拆分为三维返回
+    proposals_num = backend.int_shape(class_logits)[1]
+    return tf.reshape(deltas, shape=[-1, proposals_num, 4])  # [batch_size,proposals_num,(dy,dx,dh,dw)]
 
 
 def main():

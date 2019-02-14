@@ -110,13 +110,14 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
         rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, num_classes, image_max_dim, pool_size=(7, 7),
                                               fc_layers_size=1024)
         # 处理类别相关
-        rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x))([rcnn_deltas, rcnn_class_logits])
+        rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
-        detect_boxes, class_scores, detect_class_logits = ProposalToDetectBox(batch_size, output_box_num=10,
-                                                                              name='rpn2proposals')(
+        detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(batch_size,
+                                                                                                output_box_num=10,
+                                                                                                name='proposals2detectboxes')(
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         return Model(inputs=[input_image, input_image_meta],
-                     outputs=[detect_boxes, class_scores, detect_class_logits])
+                     outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
 
 
 def compile(keras_model, config, learning_rate, momentum):
