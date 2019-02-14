@@ -17,6 +17,8 @@ from faster_rcnn.layers.target import RpnTarget, DetectTarget
 from faster_rcnn.layers.proposals import RpnToProposal
 from faster_rcnn.layers.roi_align import RoiAlign
 from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss, detect_regress_loss, detect_cls_loss
+from faster_rcnn.layers.specific_to_agnostic import deal_delta
+from faster_rcnn.layers.detect_boxes import ProposalToDetectBox
 
 
 def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
@@ -48,7 +50,7 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
                      outputs=[cls_loss, regress_loss])
     else:  # 测试阶段
         # 应用分类和回归
-        detect_boxes, class_scores = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+        detect_boxes, class_scores, _ = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
         return Model(inputs=[input_image, input_image_meta],
                      outputs=[detect_boxes, class_scores])
@@ -81,7 +83,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 应用分类和回归生成proposal
-        proposal_boxes, _ = RpnToProposal(batch_size, output_box_num=1000, name='rpn2proposals')(
+        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.6, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
 
         # 检测网络的分类和回归目标
@@ -101,11 +103,20 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
         return Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
     else:  # 测试阶段
-        # 应用分类和回归
-        detect_boxes, class_scores = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+        # 应用分类和回归生成proposal
+        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.6, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
+        # 检测网络
+        rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, num_classes, image_max_dim, pool_size=(7, 7),
+                                              fc_layers_size=1024)
+        # 处理类别相关
+        rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x))([rcnn_deltas, rcnn_class_logits])
+        # 应用分类和回归生成最终检测框
+        detect_boxes, class_scores, detect_class_logits = ProposalToDetectBox(batch_size, output_box_num=10,
+                                                                              name='rpn2proposals')(
+            [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         return Model(inputs=[input_image, input_image_meta],
-                     outputs=[detect_boxes, class_scores])
+                     outputs=[detect_boxes, class_scores, detect_class_logits])
 
 
 def compile(keras_model, config, learning_rate, momentum):

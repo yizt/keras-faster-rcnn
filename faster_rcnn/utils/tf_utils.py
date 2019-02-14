@@ -267,6 +267,63 @@ def remove_pad(input_tensor):
     return input_tensor[:real_size, :-1]
 
 
+def apply_regress(deltas, anchors):
+    """
+    应用回归目标到边框
+    :param deltas: 回归目标[N,(dy, dx, dh, dw)]
+    :param anchors: anchor boxes[N,(y1,x1,y2,x2)]
+    :return:
+    """
+    # 高度和宽度
+    h = anchors[:, 2] - anchors[:, 0]
+    w = anchors[:, 3] - anchors[:, 1]
+
+    # 中心点坐标
+    cy = (anchors[:, 2] + anchors[:, 0]) * 0.5
+    cx = (anchors[:, 3] + anchors[:, 1]) * 0.5
+
+    # 回归系数
+    deltas *= tf.constant([0.1, 0.1, 0.2, 0.2])
+    dy, dx, dh, dw = deltas[:, 0], deltas[:, 1], deltas[:, 2], deltas[:, 3]
+
+    # 中心坐标回归
+    cy += dy * h
+    cx += dx * w
+    # 高度和宽度回归
+    h *= tf.exp(dh)
+    w *= tf.exp(dw)
+
+    # 转为y1,x1,y2,x2
+    y1 = cy - h * 0.5
+    x1 = cx - w * 0.5
+    y2 = cy + h * 0.5
+    x2 = cx + w * 0.5
+
+    return tf.stack([y1, x1, y2, x2], axis=1)
+
+
+def nms(boxes, scores, class_logits, max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
+    """
+    非极大抑制
+    :param boxes: 形状为[num_boxes, 4]的二维浮点型Tensor.
+    :param scores: 形状为[num_boxes]的一维浮点型Tensor,表示与每个框(每行框)对应的单个分数.
+    :param class_logits: 形状为[num_boxes,num_classes] 原始的预测类别
+    :param max_output_size: 一个标量整数Tensor,表示通过非最大抑制选择的框的最大数量.
+    :param iou_threshold: 浮点数,IOU 阈值
+    :param score_threshold:  浮点数, 过滤低于阈值的边框
+    :param name:
+    :return: 检测边框、边框得分、边框类别
+    """
+    indices = tf.image.non_max_suppression(boxes, scores, max_output_size, iou_threshold, score_threshold, name)  # 一维索引
+    output_boxes = tf.gather(boxes, indices)  # (M,4)
+    class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
+    class_logits = tf.gather(class_logits, indices)
+    # padding到固定大小
+    return pad_to_fixed_size(output_boxes, max_output_size), \
+           pad_to_fixed_size(class_scores, max_output_size), \
+           pad_to_fixed_size(class_logits, max_output_size)
+
+
 if __name__ == '__main__':
     sess = tf.Session()
     x = sess.run(tf.maximum(3.0, 2.0))
