@@ -40,12 +40,10 @@ def _find_node(parent, name, debug_name=None, parse=None):
     return result
 
 
-def get_voc_data(input_path):
+def get_voc_data(input_path, class_mapping={}):
     all_imgs = []
 
     classes_count = {}
-
-    class_mapping = {}
 
     data_paths = [os.path.join(input_path, s) for s in ['VOC2007']]
 

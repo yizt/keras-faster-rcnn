@@ -83,7 +83,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 应用分类和回归生成proposal
-        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.6, name='rpn2proposals')(
+        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.7, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
 
         # 检测网络的分类和回归目标
@@ -104,7 +104,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
     else:  # 测试阶段
         # 应用分类和回归生成proposal
-        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.6, name='rpn2proposals')(
+        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.7, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, num_classes, image_max_dim, pool_size=(7, 7),
@@ -118,6 +118,13 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         return Model(inputs=[input_image, input_image_meta],
                      outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
+
+
+def _get_layer(model,name):
+    for layer in model.layers:
+        if layer.name == name:
+            return layer
+    return None
 
 
 def compile(keras_model, config, learning_rate, momentum):
@@ -135,8 +142,8 @@ def compile(keras_model, config, learning_rate, momentum):
     loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss",
                   "rcnn_class_loss"]  # , "rpn_bbox_loss",rpn_class_loss
     for name in loss_names:
-        layer = keras_model.get_layer(name)
-        if layer.output in keras_model.losses or layer is None:
+        layer = _get_layer(keras_model, name)
+        if layer is None or layer.output in keras_model.losses:
             continue
         loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
@@ -160,7 +167,9 @@ def compile(keras_model, config, learning_rate, momentum):
     for name in loss_names:
         if name in keras_model.metrics_names:
             continue
-        layer = keras_model.get_layer(name)
+        layer = _get_layer(keras_model, name)
+        if layer is None:
+            continue
         keras_model.metrics_names.append(name)
         loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
@@ -178,9 +187,10 @@ def compile(keras_model, config, learning_rate, momentum):
     keras_model.metrics_names.append('miss_match_gt_num')
     keras_model.metrics_tensors.append(layer.output[5])
     # 检测结果统计指标
-    layer = keras_model.get_layer('rcnn_target')
-    keras_model.metrics_names.append('rcnn_miss_match_gt_num')
-    keras_model.metrics_tensors.append(layer.output[3])
+    layer = _get_layer(keras_model, 'rcnn_target')
+    if layer is not None:
+        keras_model.metrics_names.append('rcnn_miss_match_gt_num')
+        keras_model.metrics_tensors.append(layer.output[3])
 
 
 #

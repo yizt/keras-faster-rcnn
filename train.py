@@ -10,6 +10,8 @@ Created on 2018/12/16 上午9:30
 
 import random
 import numpy as np
+import argparse
+import sys
 from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.pascal_voc import get_voc_data
 from faster_rcnn.utils.image import load_image_gt
@@ -44,12 +46,12 @@ def generator(all_image_info, batch_size):
                np.asarray(batch_bbox)], None
 
 
-def get_call_back():
+def get_call_back(stage):
     """
     定义call back
     :return:
     """
-    checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-rpn.{epoch:03d}.h5',
+    checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + stage + '.{epoch:03d}.h5',
                                  monitor='acc',
                                  verbose=1,
                                  save_best_only=False)
@@ -64,7 +66,7 @@ def get_call_back():
     return [checkpoint, lr_reducer]
 
 
-if __name__ == '__main__':
+def main(args):
     from tensorflow.python import debug as tf_debug
     import keras.backend as K
 
@@ -77,18 +79,37 @@ if __name__ == '__main__':
     # voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
     # voc_path = 'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
     # voc_path = '/opt/dataset/VOCdevkit'
-    all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path)
+    all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path, config.CLASS_MAPPING)
     print("all_img_info:{}".format(len(all_img_info)))
-    # m = rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
-    m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
-                     50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
-    m.load_weights(config.pretrained_weights, by_name=True)
-    # m.load_weights('resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5', by_name=True)
-    compile(m, config, 1e-4, 0.9)
-    m.summary()
+    #
+    if 'rpn' in args.stages:
+        m = models.rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
+        m.load_weights(config.pretrained_weights, by_name=True)
+        compile(m, config, 1e-3, 0.9)
+        m.summary()
+        m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
+                        epochs=10,
+                        steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
+                        verbose=1,
+                        callbacks=get_call_back('rpn'))
+        m.save(config.rpn_weights)
+    if 'rcnn' in args.stages:
+        m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
+                         50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
+        m.load_weights(config.rpn_weights, by_name=True)
+        compile(m, config, 1e-3, 0.9)
+        m.summary()
+        m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
+                        epochs=10,
+                        steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
+                        verbose=1,
+                        callbacks=get_call_back('rcnn'))
+        m.save(config.rcnn_weights)
 
-    m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
-                    epochs=10,
-                    steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
-                    verbose=1,
-                    callbacks=get_call_back())
+
+if __name__ == '__main__':
+    parse = argparse.ArgumentParser()
+    parse.add_argument("--stages", type=str, nargs='+', default=['rpn'], help="stage: rpn、rcnn")
+    argments = parse.parse_args(sys.argv[1:])
+    main(argments)
+
