@@ -243,9 +243,32 @@ class VOCConfig(Config):
 
     # Number of classes (including background)
     NUM_CLASSES = 1 + 20  # voc has 20 classes
+    CLASS_MAPPING = {'bg': 0,
+                     'train': 1,
+                     'dog': 2,
+                     'bicycle': 3,
+                     'bus': 4,
+                     'car': 5,
+                     'person': 6,
+                     'bird': 7,
+                     'chair': 8,
+                     'diningtable': 9,
+                     'sheep': 10,
+                     'tvmonitor': 11,
+                     'horse': 12,
+                     'sofa': 13,
+                     'bottle': 14,
+                     'cat': 15,
+                     'cow': 16,
+                     'pottedplant': 17,
+                     'boat': 18,
+                     'motorbike': 19,
+                     'aeroplane': 20
+                     }
 
     pretrained_weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
-    weights = '/tmp/frcnn-rpn.010.h5'
+    rpn_weights = '/tmp/frcnn-rpn.h5'
+    rcnn_weights = '/tmp/frcnn-rcnn.h5'
     voc_path = '/opt/dataset/VOCdevkit'
 
 
