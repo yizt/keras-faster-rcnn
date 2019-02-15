@@ -222,17 +222,19 @@ def resize(image, output_shape, order=1, mode='constant', cval=0, clip=True,
 
 
 def pad_to_fixed_size_with_negative(input_tensor, fixed_size, negative_num):
+    # 输入尺寸
     input_size = tf.shape(input_tensor)[0]
     # tag 列 padding
-    positive_num = input_size - negative_num
+    positive_num = input_size - negative_num  # 正例数
+    # 正样本padding 1,负样本padding -1
     column_padding = tf.concat([tf.ones([positive_num]),
                                 tf.ones([negative_num]) * -1],
                                axis=0)
     # 都转为float,拼接
     x = tf.concat([tf.cast(input_tensor, tf.float32), tf.expand_dims(column_padding, axis=1)], axis=1)
-    # 行padding
+    # 不够的padding 0
     padding_size = tf.maximum(0, fixed_size - input_size)
-    x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
+    x = tf.pad(x[:fixed_size], [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)
     return x
 
 

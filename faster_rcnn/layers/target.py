@@ -77,6 +77,9 @@ def regress_target(anchors, gt_boxes):
 def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     """
     处理单个图像的rpn分类和回归目标
+    a)正样本为 IoU>0.7的anchor;负样本为IoU<0.3的anchor; 居中的为中性样本，丢弃
+    b)需要保证所有的GT都有anchor对应，即使IoU<0.3；
+    c)正负样本比例保持1:1
     :param gt_boxes: GT 边框坐标 [MAX_GT_BOXs, (y1,x1,y2,x2,tag)] ,tag=0 为padding
     :param gt_cls: GT 类别 [MAX_GT_BOXs, 1+1] ;最后一位为tag, tag=0 为padding
     :param anchors: [anchor_num, (y1,x1,y2,x2)]
@@ -95,41 +98,42 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     iou = compute_iou(gt_boxes, anchors)
     # print("iou:{}".format(iou))
 
-    # If an anchor overlaps a GT box with IoU >= 0.7 then it's positive.
-    # If an anchor overlaps a GT box with IoU < 0.3 then it's negative.
-    # Neutral anchors are those that don't match the conditions above,
+    # 每个GT对应的IoU最大的anchor是正样本
+    gt_iou_argmax = tf.argmax(iou, axis=1)
+    positive_gt_indices_1 = tf.range(tf.shape(gt_boxes)[0])  # 索引号就是1..n-1
+    positive_anchor_indices_1 = gt_iou_argmax
 
-    # 每个anchors最大iou
+    # 每个anchors最大iou ，且iou>0.7的为正样本
     anchors_iou_max = tf.reduce_max(iou, axis=0)
-
-    # 正样本索引号（iou>0.7),[[0],[2]]转为[0,2]
-    positive_indices = tf.where(anchors_iou_max > 0.6, name='rpn_target_positive_indices')  # [:, 0]
-
-    # # 每个GT最大的anchor也是正样本
-    # gt_iou_argmax = tf.argmax(iou, axis=1)
-    # gt_iou_max = tf.reduce_max(iou, axis=1)
-
-    # 负样本索引号
-    negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
-
-    # 正样本
-    positive_num = int(rpn_train_anchors * 0.5)  # 正负比例1:1
-    positive_num = tf.minimum(positive_num, tf.shape(positive_indices)[0], name='rpn_target_positive_num')
-    positive_indices = tf.random_shuffle(positive_indices)[:positive_num]
-    positive_anchors = tf.gather_nd(anchors, positive_indices)
-
-    # 找到正样本对应的GT boxes
+    # 正样本索引号（iou>0.7),
+    positive_anchor_indices_2 = tf.where(anchors_iou_max > 0.7, name='rpn_target_positive_indices')  # [:, 0]
+    # 找到正样本对应的GT boxes 索引
     anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
-    positive_gt_indices = tf.gather_nd(anchors_iou_argmax, positive_indices)
-    # positive_gt_indices是一维的，使用gather
+    positive_gt_indices_2 = tf.gather_nd(anchors_iou_argmax, positive_anchor_indices_2)
+
+    # 合并两部分正样本
+    positive_gt_indices = tf.concat([positive_gt_indices_1, tf.cast(positive_gt_indices_2, tf.int32)], axis=0,
+                                    name='rpn_gt_boxes_concat')
+    positive_anchor_indices = tf.concat([positive_anchor_indices_1, positive_anchor_indices_2[:, 0]], axis=0,
+                                        name='rpn_positive_anchors_concat')
+    positive_anchors = tf.gather(anchors, positive_anchor_indices)
     positive_gt_boxes = tf.gather(gt_boxes, positive_gt_indices)
     positive_gt_cls = tf.gather(gt_cls, positive_gt_indices)
 
+    # 根据正负样本比1:1,确定最终的正样本
+    positive_num = tf.minimum(tf.shape(positive_anchors)[0], int(rpn_train_anchors * 0.5))
+    positive_gt_boxes, positive_gt_cls, positive_anchors = shuffle_sample(
+        [positive_gt_boxes, positive_gt_cls, positive_anchors],
+        tf.shape(positive_anchors)[0],
+        positive_num)
     # 回归目标计算
     deltas = regress_target(positive_anchors, positive_gt_boxes)
 
-    # 负样本
-    negative_num = tf.minimum(rpn_train_anchors - positive_num,
+    # 处理负样本
+    negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
+
+    # 负样本,保证负样本不超过一半
+    negative_num = tf.minimum(int(rpn_train_anchors * 0.5),
                               tf.shape(negative_indices)[0], name='rpn_target_negative_num')
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
     negative_gt_cls = tf.zeros([negative_num])  # 负样本类别id为0
@@ -138,21 +142,23 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     # 合并正负样本
     deltas = tf.concat([deltas, negative_deltas], axis=0, name='rpn_target_deltas')
     class_ids = tf.concat([positive_gt_cls, negative_gt_cls], axis=0, name='rpn_target_class_ids')
-    indices = tf.concat([positive_indices, negative_indices], axis=0, name='rpn_train_anchor_indices')
+    indices = tf.concat([positive_anchor_indices, negative_indices[:, 0]], axis=0, name='rpn_train_anchor_indices')
 
     # 计算padding
     deltas, class_ids = tf_utils.pad_list_to_fixed_size([deltas, tf.expand_dims(class_ids, 1)],
                                                         rpn_train_anchors)
     # 将负样本tag标志改为-1;方便后续处理;
-    indices = tf_utils.pad_to_fixed_size_with_negative(indices, rpn_train_anchors, negative_num=negative_num)
+    indices = tf_utils.pad_to_fixed_size_with_negative(tf.expand_dims(indices, 1), rpn_train_anchors,
+                                                       negative_num=negative_num)
     # 其它统计指标
     gt_num = tf.shape(gt_cls)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
+    gt_match_min_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # GT匹配anchor最小的IoU
 
     return deltas, class_ids, indices, tf.cast(  # 用作度量的必须是浮点类型
         gt_num, dtype=tf.float32), tf.cast(
         positive_num, dtype=tf.float32), tf.cast(
-        miss_match_gt_num, dtype=tf.float32)
+        miss_match_gt_num, dtype=tf.float32), gt_match_min_iou
 
 
 class RpnTarget(keras.layers.Layer):
@@ -192,6 +198,7 @@ class RpnTarget(keras.layers.Layer):
         return [(input_shape[0][0], self.train_anchors_per_image, 2),  # 只有两类
                 (input_shape[0][0], self.train_anchors_per_image, 4),
                 (input_shape[0][0], self.train_anchors_per_image, 2),
+                (input_shape[0][0],),
                 (input_shape[0][0],),
                 (input_shape[0][0],),
                 (input_shape[0][0],)]

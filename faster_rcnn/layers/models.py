@@ -186,6 +186,9 @@ def compile(keras_model, config, learning_rate, momentum):
 
     keras_model.metrics_names.append('miss_match_gt_num')
     keras_model.metrics_tensors.append(layer.output[5])
+
+    keras_model.metrics_names.append('gt_match_min_iou')
+    keras_model.metrics_tensors.append(layer.output[6])
     # 检测结果统计指标
     layer = _get_layer(keras_model, 'rcnn_target')
     if layer is not None:
