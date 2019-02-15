@@ -213,7 +213,7 @@ def shuffle_sample(tensor_list, tensor_size, sample_size):
     :param sample_size: 采样尺寸
     :return:
     """
-    shuffle_indices = tf.range(tensor_size)[:sample_size]
+    shuffle_indices = tf.random_shuffle(tf.range(tensor_size))[:sample_size]
     return [tf.gather(tensor, shuffle_indices) for tensor in tensor_list]
 
 
