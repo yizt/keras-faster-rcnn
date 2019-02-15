@@ -26,7 +26,7 @@ def detect_boxes(boxes, class_logits, max_output_size, iou_threshold=0.5, score_
     class_scores = tf.reduce_max(tf.nn.softmax(class_logits, axis=-1), axis=-1)  # [num_boxes]
     class_ids = tf.argmax(class_logits, axis=-1)  # [num_boxes]
     # 过滤背景类别0
-    keep = tf.where(class_ids > 0)
+    keep = tf.where(class_ids > 0)  # 保留的索引号
     keep_class_scores = tf.gather_nd(class_scores, keep)
     keep_class_ids = tf.gather_nd(class_ids, keep)
     keep_boxes = tf.gather_nd(boxes, keep)

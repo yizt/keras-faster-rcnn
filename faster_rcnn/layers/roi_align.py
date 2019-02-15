@@ -50,7 +50,7 @@ class RoiAlign(layers.Layer):
                                           crop_size=self.pool_size)  # (batch_size*roi_num,h,w,channels)
         # 转为(batch_size,roi_num,h,w,channels)
         shape = tf.shape(output)
-        output = tf.reshape(output, [batch_size, roi_num, shape[1], shape[2], shape[3]])
+        output = tf.reshape(output, [batch_size, roi_num, shape[1], shape[2], shape[3]], name='roi_align_output')
         return output
 
     def compute_output_shape(self, input_shape):

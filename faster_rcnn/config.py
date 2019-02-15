@@ -278,5 +278,10 @@ class LocalVOCConfig(VOCConfig):
     voc_path = r'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
 
 
+class MacVoConfig():
+    voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
+    pretrained_weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+
+
 # 当前配置
 current_config = VOCConfig()

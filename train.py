@@ -67,18 +67,14 @@ def get_call_back(stage):
 
 
 def main(args):
-    from tensorflow.python import debug as tf_debug
-    import keras.backend as K
-
+    # from tensorflow.python import debug as tf_debug
+    # import keras.backend as K
+    #
     # sess = K.get_session()
     # sess = tf_debug.LocalCLIDebugWrapperSession(sess)
     # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
     #
     # K.set_session(sess)
-
-    # voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
-    # voc_path = 'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
-    # voc_path = '/opt/dataset/VOCdevkit'
     all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path, config.CLASS_MAPPING)
     print("all_img_info:{}".format(len(all_img_info)))
     #
@@ -88,7 +84,7 @@ def main(args):
         compile(m, config, 1e-3, 0.9)
         m.summary()
         m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
-                        epochs=10,
+                        epochs=30,
                         steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         callbacks=get_call_back('rpn'))
