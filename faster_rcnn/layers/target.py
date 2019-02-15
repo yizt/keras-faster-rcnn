@@ -116,16 +116,17 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
                                     name='rpn_gt_boxes_concat')
     positive_anchor_indices = tf.concat([positive_anchor_indices_1, positive_anchor_indices_2[:, 0]], axis=0,
                                         name='rpn_positive_anchors_concat')
+
+    # 根据正负样本比1:1,确定最终的正样本
+    positive_num = tf.minimum(tf.shape(positive_anchor_indices)[0], int(rpn_train_anchors * 0.5))
+    positive_anchor_indices, positive_gt_indices = shuffle_sample(
+        [positive_anchor_indices, positive_gt_indices],
+        tf.shape(positive_anchor_indices)[0],
+        positive_num)
+    # 根据索引选择anchor和GT
     positive_anchors = tf.gather(anchors, positive_anchor_indices)
     positive_gt_boxes = tf.gather(gt_boxes, positive_gt_indices)
     positive_gt_cls = tf.gather(gt_cls, positive_gt_indices)
-
-    # 根据正负样本比1:1,确定最终的正样本
-    positive_num = tf.minimum(tf.shape(positive_anchors)[0], int(rpn_train_anchors * 0.5))
-    positive_gt_boxes, positive_gt_cls, positive_anchors = shuffle_sample(
-        [positive_gt_boxes, positive_gt_cls, positive_anchors],
-        tf.shape(positive_anchors)[0],
-        positive_num)
     # 回归目标计算
     deltas = regress_target(positive_anchors, positive_gt_boxes)
 
