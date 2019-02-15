@@ -66,7 +66,8 @@ def detect_boxes(boxes, class_logits, max_output_size, iou_threshold=0.5, score_
     output_class_logits = tf.gather(keep_class_logits, nms_keep)
 
     # 保留评分最高的top N
-    top_idx = tf.nn.top_k(output_scores, k=max_output_size)[1]  # top_k返回tuple(values,indices)
+    top_num = tf.minimum(max_output_size, tf.shape(output_scores)[0])
+    top_idx = tf.nn.top_k(output_scores, k=top_num)[1]  # top_k返回tuple(values,indices)
     output_boxes = tf.gather(output_boxes, top_idx)
     output_scores = tf.gather(output_scores, top_idx)
     output_class_ids = tf.gather(output_class_ids, top_idx)
@@ -84,13 +85,13 @@ class ProposalToDetectBox(keras.layers.Layer):
     根据候选框生成最终的检测框
     """
 
-    def __init__(self, batch_size, score_threshold=0.05, output_box_num=300, iou_threshold=0.5, **kwargs):
+    def __init__(self, batch_size, score_threshold=0.01, output_box_num=10, iou_threshold=0.3, **kwargs):
         """
 
         :param batch_size: batch_size
         :param score_threshold: 分数阈值
         :param output_box_num: 生成proposal 边框数量
-        :param iou_threshold: nms iou阈值
+        :param iou_threshold: nms iou阈值; 由于是类别相关的iou值较低
         """
         self.batch_size = batch_size
         self.score_threshold = score_threshold
