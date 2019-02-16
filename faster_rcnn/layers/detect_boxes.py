@@ -85,7 +85,7 @@ class ProposalToDetectBox(keras.layers.Layer):
     根据候选框生成最终的检测框
     """
 
-    def __init__(self, batch_size, score_threshold=0.01, output_box_num=10, iou_threshold=0.3, **kwargs):
+    def __init__(self, batch_size, score_threshold=0.6, output_box_num=10, iou_threshold=0.3, **kwargs):
         """
 
         :param batch_size: batch_size

@@ -113,6 +113,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
         detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(batch_size,
+                                                                                                score_threshold=0.6,
                                                                                                 output_box_num=10,
                                                                                                 name='proposals2detectboxes')(
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
@@ -120,7 +121,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
 
 
-def _get_layer(model,name):
+def _get_layer(model, name):
     for layer in model.layers:
         if layer.name == name:
             return layer
