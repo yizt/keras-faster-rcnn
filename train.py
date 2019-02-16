@@ -12,6 +12,7 @@ import random
 import numpy as np
 import argparse
 import sys
+import os
 from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.pascal_voc import get_voc_data
 from faster_rcnn.utils.image import load_image_gt
@@ -93,7 +94,11 @@ def main(args):
     if 'rcnn' in args.stages:
         m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
                          50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
-        m.load_weights(config.rpn_weights, by_name=True)
+        # 加载预训练模型
+        if os.path.exists(config.rpn_weights):  # 有rpn预训练模型就加载，没有直接加载resnet50预训练模型
+            m.load_weights(config.rpn_weights, by_name=True)
+        else:
+            m.load_weights(config.pretrained_weights, by_name=True)
         compile(m, config, 1e-3, 0.9)
         m.summary()
         m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
