@@ -70,4 +70,10 @@ python train.py --stages rcnn
 ![examples](demo_images/inferece_examples.2.png)
 
 
-
+## todo
+0. 评估标准
+1. 边框裁剪放到Anchors层外面
+2. batch_slice部分重构
+3. 模型编译重构,分离度量指标
+4. GT boxes信息加载部分重构
+5. 不同输入尺寸大小精度比较
