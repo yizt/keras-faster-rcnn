@@ -34,9 +34,41 @@ def remove_pad(input_np):
     return input_np[:real_size, :-1]
 
 
+def compute_iou(boxes_a, boxes_b):
+    """
+    numpy 计算IoU
+    :param boxes_a: (N,4)
+    :param boxes_b: (M,4)
+    :return:  IoU (N,M)
+    """
+    # 扩维
+    boxes_a = np.expand_dims(boxes_a, axis=1)  # (N,1,4)
+    boxes_b = np.expand_dims(boxes_b, axis=0)  # (1,M,4)
+
+    # 分别计算高度和宽度的交集
+    overlap_h = np.maximum(0.0,
+                           np.minimum(boxes_a[..., 2], boxes_b[..., 2]) -
+                           np.maximum(boxes_a[..., 0], boxes_b[..., 0]))  # (N,M)
+
+    overlap_w = np.maximum(0.0,
+                           np.minimum(boxes_a[..., 3], boxes_b[..., 3]) -
+                           np.maximum(boxes_a[..., 1], boxes_b[..., 1]))  # (N,M)
+
+    # 交集
+    overlap = overlap_w * overlap_h
+
+    # 计算面积
+    area_a = (boxes_a[..., 2] - boxes_a[..., 0]) * (boxes_a[..., 3] - boxes_a[..., 1])
+    area_b = (boxes_b[..., 2] - boxes_b[..., 0]) * (boxes_b[..., 3] - boxes_b[..., 1])
+
+    # 交并比
+    iou = overlap / (area_a + area_b - overlap)
+    return iou
+
+
 def main():
     x = np.ones(shape=(3, 3))
-    pad_x = pad_to_fixed_size(x,2)
+    pad_x = pad_to_fixed_size(x, 2)
     print("pad_x.shape:{}".format(pad_x.shape))
 
     remove_pad_x = remove_pad(pad_x)
