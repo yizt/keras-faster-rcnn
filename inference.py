@@ -5,13 +5,17 @@
    Author :       mick.yi
    date：          2019/2/13
 """
+import matplotlib
+
+matplotlib.use('Agg')
+
+from matplotlib import pyplot as plt
 import numpy as np
-from faster_rcnn.preprocess.pascal_voc import get_voc_data
+from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.image import load_image_gt
 from faster_rcnn.config import current_config as config
 from faster_rcnn.utils import visualize, np_utils
 from faster_rcnn.layers import models
-import matplotlib.pyplot as plt
 
 
 def class_map_to_id_map(class_mapping):
@@ -23,8 +27,10 @@ def class_map_to_id_map(class_mapping):
 
 def main():
     # 加载数据
-    all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path, config.CLASS_MAPPING)
-    all_img_info = [info for info in all_img_info if info['imageset'] == 'test']  # 测试集
+    dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
+    dataset.prepare()
+    all_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 测试集
+
     # 加载模型
     m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 1, config.NUM_CLASSES,
                      50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO, stage='test')
@@ -32,10 +38,13 @@ def main():
     m.summary()
 
     # class map 转为 id map
-    id_mapping = class_map_to_id_map(class_mapping)
+    id_mapping = class_map_to_id_map(config.CLASS_MAPPING)
 
     def _show_inference(id, ax=None):
-        image, image_meta, class_ids, bbox = load_image_gt(config, all_img_info[id], id)
+        image, image_meta, _ = load_image_gt(id,
+                                             all_img_info[id]['filepath'],
+                                             config.IMAGE_MAX_DIM,
+                                             all_img_info[id]['boxes'])
         boxes, scores, class_ids, class_logits = m.predict(
             [np.expand_dims(image, axis=0), np.expand_dims(image_meta, axis=0)])
         boxes = np_utils.remove_pad(boxes[0])

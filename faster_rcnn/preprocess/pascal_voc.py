@@ -9,7 +9,6 @@ voc数据集
 """
 from six import raise_from
 import os
-from faster_rcnn.preprocess.input import Dataset
 
 try:
     import xml.etree.cElementTree as ET
@@ -91,7 +90,8 @@ def get_voc_data(input_path, class_mapping={}):
                 element_height = int(element.find('size').find('height').text)
 
                 if len(element_objs) > 0:
-                    annotation_data = {'filepath': os.path.join(imgs_path, element_filename),
+                    annotation_data = {'filename': element_filename,
+                                       'filepath': os.path.join(imgs_path, element_filename),
                                        'width': element_width,
                                        'height': element_height, 'bboxes': []}
 
@@ -131,25 +131,6 @@ def get_voc_data(input_path, class_mapping={}):
                 print(e)
                 continue
     return all_imgs, classes_count, class_mapping
-
-
-class PascalVoc(Dataset):
-
-    def load_voc(self, data_dir):
-        all_imgs, _, class_map = get_voc_data(data_dir)
-
-        # Add classes
-        for class_name in class_map.keys():
-            self.add_class("voc", class_map[class_name], class_name)
-
-        # Add images
-        for i, img_info in enumerate(all_imgs):
-            self.add_image(
-                "voc", image_id=i,
-                path=img_info['filepath'],
-                width=img_info["width"],
-                height=img_info["height"],
-                annotations=img_info['bboxes'])
 
 
 if __name__ == '__main__':

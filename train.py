@@ -8,43 +8,26 @@ Created on 2018/12/16 上午9:30
 
 """
 
-import random
 import numpy as np
 import argparse
 import sys
 import os
+import tensorflow as tf
+import keras
 from faster_rcnn.config import current_config as config
-from faster_rcnn.preprocess.pascal_voc import get_voc_data
-from faster_rcnn.utils.image import load_image_gt
-from faster_rcnn.utils.np_utils import pad_to_fixed_size
+from faster_rcnn.preprocess.input import VocDataset
+from faster_rcnn.utils.generator import generator
 from faster_rcnn.layers import models
 from faster_rcnn.layers.models import compile
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
 
-def generator(all_image_info, batch_size):
-    image_length = len(all_image_info)
-    id_list = range(image_length)
-    while True:
-        ids = random.sample(id_list, batch_size)
-        batch_image = []
-        batch_image_meta = []
-        batch_class_ids = []
-        batch_bbox = []
-
-        for id in ids:
-            image, image_meta, class_ids, bbox = load_image_gt(
-                config, all_image_info[id], id)
-            batch_image.append(image)
-            batch_image_meta.append(image_meta)
-            # gt个数固定
-            batch_class_ids.append(pad_to_fixed_size(np.expand_dims(class_ids, axis=1), 50))
-            batch_bbox.append(pad_to_fixed_size(bbox, 50))
-        # print("np.asarray(batch_image).shape:{}".format(np.asarray(batch_image).shape))
-        yield [np.asarray(batch_image),
-               np.asarray(batch_image_meta),
-               np.asarray(batch_class_ids),
-               np.asarray(batch_bbox)], None
+def set_gpu_growth():
+    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
+    cfg = tf.ConfigProto()
+    cfg.gpu_options.allow_growth = True
+    session = tf.Session(config=cfg)
+    keras.backend.set_session(session)
 
 
 def get_call_back(stage):
@@ -76,18 +59,21 @@ def main(args):
     # sess.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
     #
     # K.set_session(sess)
-    all_img_info, classes_count, class_mapping = get_voc_data(config.voc_path, config.CLASS_MAPPING)
-    all_img_info = [info for info in all_img_info if info['imageset'] == 'trainval']  # 训练集
-    print("all_img_info:{}".format(len(all_img_info)))
+    dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
+    dataset.prepare()
+    train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
+    print("all_img_info:{}".format(len(train_img_info)))
+    # 生成器
+    gen = generator(train_img_info, config.IMAGES_PER_GPU, config.IMAGE_MAX_DIM, 50)
     #
     if 'rpn' in args.stages:
         m = models.rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
         m.load_weights(config.pretrained_weights, by_name=True)
         compile(m, config, 1e-3, 0.9)
         m.summary()
-        m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
-                        epochs=30,
-                        steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
+        m.fit_generator(gen,
+                        epochs=args.epochs,
+                        steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         callbacks=get_call_back('rpn'))
         m.save(config.rpn_weights)
@@ -101,9 +87,9 @@ def main(args):
             m.load_weights(config.pretrained_weights, by_name=True)
         compile(m, config, 1e-3, 0.9)
         m.summary()
-        m.fit_generator(generator(all_img_info, config.IMAGES_PER_GPU),
-                        epochs=20,
-                        steps_per_epoch=len(all_img_info) // config.IMAGES_PER_GPU,
+        m.fit_generator(gen,
+                        epochs=args.epochs,
+                        steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         callbacks=get_call_back('rcnn'))
         m.save(config.rcnn_weights)
@@ -111,6 +97,7 @@ def main(args):
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument("--stages", type=str, nargs='+', default=['rpn'], help="stage: rpn、rcnn")
+    parse.add_argument("--stages", type=str, nargs='+', default=['rcnn'], help="stage: rpn、rcnn")
+    parse.add_argument("--epochs", type=int, default=50, help="epochs")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)

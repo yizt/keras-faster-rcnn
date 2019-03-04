@@ -38,7 +38,7 @@ def clip_boxes(boxes, window):
     """
     将boxes裁剪到指定的窗口范围内
     :param boxes: 边框坐标，[N,(y1,x1,y2,x2)]
-    :param window: 窗口坐标，[N,(y1,x1,y2,x2)]
+    :param window: 窗口坐标，[(y1,x1,y2,x2)]
     :return:
     """
     wy1, wx1, wy2, wx2 = tf.split(window, 4)
