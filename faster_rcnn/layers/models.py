@@ -104,7 +104,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
     else:  # 测试阶段
         # 应用分类和回归生成proposal
-        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000, iou_threshold=0.7, name='rpn2proposals')(
+        proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=1000, iou_threshold=0.7, name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, num_classes, image_max_dim, pool_size=(7, 7),
@@ -113,8 +113,8 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
         detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(batch_size,
-                                                                                                score_threshold=0.6,
-                                                                                                output_box_num=10,
+                                                                                                score_threshold=0.05,
+                                                                                                output_box_num=100,
                                                                                                 name='proposals2detectboxes')(
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         return Model(inputs=[input_image, input_image_meta],
