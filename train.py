@@ -18,7 +18,6 @@ from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.generator import generator
 from faster_rcnn.layers import models
-from faster_rcnn.layers.models import compile
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
 
@@ -69,23 +68,39 @@ def main(args):
     if 'rpn' in args.stages:
         m = models.rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
         m.load_weights(config.pretrained_weights, by_name=True)
-        compile(m, config, 1e-3, 0.9)
+        loss_names = ["rpn_bbox_loss", "rpn_class_loss"]
+        models.compile(m, config, 1e-3, 0.9, loss_names)
+        # 增加个性化度量
+        layer = m.get_layer('rpn_target')
+        metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
+        models.add_metrics(m, metric_names, layer.output[-4:])
         m.summary()
         m.fit_generator(gen,
                         epochs=args.epochs,
                         steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         callbacks=get_call_back('rpn'))
+
         m.save(config.rpn_weights)
     if 'rcnn' in args.stages:
         m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
                          50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
+        loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
+        models.compile(m, config, 1e-3, 0.9, loss_names)
+        # 增加个性化度量
+        layer = m.get_layer('rpn_target')
+        metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
+        models.add_metrics(m, metric_names, layer.output[-4:])
+
+        layer = m.get_layer('rcnn_target')
+        metric_names = ['rcnn_miss_match_gt_num']
+        models.add_metrics(m, metric_names, layer.output[-1:])
         # 加载预训练模型
         if os.path.exists(config.rpn_weights):  # 有rpn预训练模型就加载，没有直接加载resnet50预训练模型
             m.load_weights(config.rpn_weights, by_name=True)
         else:
             m.load_weights(config.pretrained_weights, by_name=True)
-        compile(m, config, 1e-3, 0.9)
+
         m.summary()
         # 首先训练2/3轮数
         first_epochs = args.epochs // 3 * 2

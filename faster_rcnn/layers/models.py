@@ -147,43 +147,46 @@ def _get_layer(model, name):
     return None
 
 
-def compile(keras_model, config, learning_rate, momentum):
-    """Gets the model ready for training. Adds losses, regularization, and
-    metrics. Then calls the Keras compile() function.
+def compile(keras_model, config, learning_rate, momentum, loss_names=[]):
     """
-    # Optimizer object
+    编译模型，增加损失函数，L2正则化以
+    :param keras_model:
+    :param config:
+    :param learning_rate:
+    :param momentum:
+    :param loss_names: 损失函数列表
+    :return:
+    """
+    # 优化目标
     optimizer = keras.optimizers.SGD(
         lr=learning_rate, momentum=momentum,
-        clipnorm=config.GRADIENT_CLIP_NORM)
-    # Add Losses
-    # First, clear previously set losses to avoid duplication
+        clipnorm=1.0)
+    # 增加损失函数，首先清除之前的，防止重复
     keras_model._losses = []
     keras_model._per_input_losses = {}
-    loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss",
-                  "rcnn_class_loss"]  # , "rpn_bbox_loss",rpn_class_loss
+
     for name in loss_names:
         layer = _get_layer(keras_model, name)
         if layer is None or layer.output in keras_model.losses:
             continue
-        loss = (
-                tf.reduce_mean(layer.output, keepdims=True)
+        loss = (tf.reduce_mean(layer.output, keepdims=True)
                 * config.LOSS_WEIGHTS.get(name, 1.))
         keras_model.add_loss(loss)
 
-    # Add L2 Regularization
-    # Skip gamma and beta weights of batch normalization layers.
+    # 增加L2正则化
+    # 跳过批标准化层的 gamma 和 beta 权重
     reg_losses = [
         keras.regularizers.l2(config.WEIGHT_DECAY)(w) / tf.cast(tf.size(w), tf.float32)
         for w in keras_model.trainable_weights
         if 'gamma' not in w.name and 'beta' not in w.name]
     keras_model.add_loss(tf.add_n(reg_losses))
 
-    # Compile
+    # 编译
     keras_model.compile(
         optimizer=optimizer,
-        loss=[None] * len(keras_model.outputs))
+        loss=[None] * len(keras_model.outputs))  # 使用虚拟损失
 
-    # Add metrics for losses
+    # 为每个损失函数增加度量
     for name in loss_names:
         if name in keras_model.metrics_names:
             continue
@@ -196,24 +199,18 @@ def compile(keras_model, config, learning_rate, momentum):
                 * config.LOSS_WEIGHTS.get(name, 1.))
         keras_model.metrics_tensors.append(loss)
 
-    # 增加GT个数，正样本anchor数指标的统计
-    layer = keras_model.get_layer('rpn_target')
-    keras_model.metrics_names.append('gt_num')
-    keras_model.metrics_tensors.append(layer.output[3])
 
-    keras_model.metrics_names.append('positive_anchor_num')
-    keras_model.metrics_tensors.append(layer.output[4])
-
-    keras_model.metrics_names.append('miss_match_gt_num')
-    keras_model.metrics_tensors.append(layer.output[5])
-
-    keras_model.metrics_names.append('gt_match_min_iou')
-    keras_model.metrics_tensors.append(layer.output[6])
-    # 检测结果统计指标
-    layer = _get_layer(keras_model, 'rcnn_target')
-    if layer is not None:
-        keras_model.metrics_names.append('rcnn_miss_match_gt_num')
-        keras_model.metrics_tensors.append(layer.output[3])
+def add_metrics(keras_model, metric_name_list, metric_tensor_list):
+    """
+    增加度量
+    :param keras_model: 模型
+    :param metric_name_list: 度量名称列表
+    :param metric_tensor_list: 度量张量列表
+    :return: 无
+    """
+    for name, tensor in zip(metric_name_list, metric_tensor_list):
+        keras_model.metrics_names.append(name)
+        keras_model.metrics_tensors.append(tensor)
 
 
 #
