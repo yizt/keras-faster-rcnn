@@ -140,6 +140,26 @@ def apply_regress(deltas, anchors):
     return tf.stack([y1, x1, y2, x2], axis=1)
 
 
+def clip_boxes(boxes, window):
+    """
+    将boxes裁剪到指定的窗口范围内
+    :param boxes: 边框坐标，[N,(y1,x1,y2,x2)]
+    :param window: 窗口坐标，[(y1,x1,y2,x2)]
+    :return:
+    """
+    wy1, wx1, wy2, wx2 = tf.split(window, 4)
+    y1, x1, y2, x2 = tf.split(boxes, 4, axis=1)  # split后维数不变
+
+    y1 = tf.maximum(tf.minimum(y1, wy2), wy1)  # wy1<=y1<=wy2
+    y2 = tf.maximum(tf.minimum(y2, wy2), wy1)
+    x1 = tf.maximum(tf.minimum(x1, wx2), wx1)
+    x2 = tf.maximum(tf.minimum(x2, wx2), wx1)
+
+    clipped_boxes = tf.concat([y1, x1, y2, x2], axis=1, name='clipped_boxes')
+    # clipped_boxes.([boxes.shape[0], 4])
+    return clipped_boxes
+
+
 def main():
     sess = tf.Session()
     x = sess.run(tf.maximum(3.0, 2.0))
