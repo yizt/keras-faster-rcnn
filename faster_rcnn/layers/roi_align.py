@@ -40,9 +40,10 @@ class RoiAlign(layers.Layer):
         # roi打平为二维
         rois = tf.reshape(rois, [-1, 4])
 
-        # 停止反向传播
-        rois = tf.stop_gradient(rois)
-        batch_index = tf.stop_gradient(batch_index)
+        # 停止反向传播（注释此部分，引起错误：It is possible you are working with a resizeable TensorArray and
+        # stop_gradients is not allowing the gradients to be written）
+        # rois = tf.stop_gradient(rois)
+        # batch_index = tf.stop_gradient(batch_index)
         # RoiAlign
         output = tf.image.crop_and_resize(image=features,
                                           boxes=rois,
