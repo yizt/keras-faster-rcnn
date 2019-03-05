@@ -81,17 +81,14 @@ def resize_image(image, max_dim):
 
 def compose_image_meta(image_id, original_image_shape, image_shape,
                        window, scale):
-    """Takes attributes of an image and puts them in one 1D array.
-
-    image_id: An int ID of the image. Useful for debugging.
-    original_image_shape: [H, W, C] before resizing or padding.
-    image_shape: [H, W, C] after resizing and padding
-    window: (y1, x1, y2, x2) in pixels. The area of the image where the real
-            image is (excluding the padding)
-    scale: The scaling factor applied to the original image (float32)
-    active_class_ids: List of class_ids available in the dataset from which
-        the image came. Useful if training on images from multiple datasets
-        where not all classes are present in all datasets.
+    """
+    组合图像元数据信息，返回numpy数据
+    :param image_id:
+    :param original_image_shape: 原始图像形状，tuple(H,W,3)
+    :param image_shape: 缩放后图像形状tuple(H,W,3)
+    :param window: 原始图像在缩放图像上的窗口位置（y1,x1,y2,x2)
+    :param scale: 缩放因子
+    :return:
     """
     meta = np.array(
         [image_id] +  # size=1
@@ -104,12 +101,10 @@ def compose_image_meta(image_id, original_image_shape, image_shape,
 
 
 def parse_image_meta(meta):
-    """Parses an array that contains image attributes to its components.
-    See compose_image_meta() for more details.
-
-    meta: [batch, meta length] where meta length depends on NUM_CLASSES
-
-    Returns a dict of the parsed values.
+    """
+    解析图像元数据信息,注意输入是元数据信息数组
+    :param meta: [batch,12]
+    :return:
     """
     image_id = meta[:, 0]
     original_image_shape = meta[:, 1:4]
@@ -136,4 +131,20 @@ def adjust_box(boxes, padding, scale):
     boxes = boxes * scale
     boxes[:, 0::2] += padding[0][0]  # 高度padding
     boxes[:, 1::2] += padding[1][0]  # 宽度padding
+    return boxes
+
+
+def recover_detect_boxes(boxes, window, scale):
+    """
+    将检测边框映射到原始图像上，去除padding和缩放
+    :param boxes: numpy数组，[n,(y1,x1,y2,x2)]
+    :param window: [(y1,x1,y2,x2)]
+    :param scale: 标量
+    :return:
+    """
+    # 去除padding
+    boxes[:, 0::2] -= window[0]
+    boxes[:, 1::2] -= window[1]
+    # 还原缩放
+    boxes /= scale
     return boxes
