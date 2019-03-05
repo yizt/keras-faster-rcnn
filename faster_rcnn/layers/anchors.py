@@ -63,16 +63,14 @@ def shift(shape, strides, base_anchors):
 
 
 class Anchor(keras.layers.Layer):
-    def __init__(self, batch_size, base_size, ratios, scales, strides, **kwargs):
+    def __init__(self, base_size, ratios, scales, strides, **kwargs):
         """
 
-        :param batch_size: batch_size 大小
         :param base_size: anchor的base_size,如：64
         :param ratios: 长宽比; 如 [1,1/2,2]
         :param scales: 缩放比: 如 [1,2,4]
         :param strides: 步长,一般为base_size的四分之一
         """
-        self.batch_size = batch_size
         self.base_size = base_size
         self.strides = strides
         self.ratios = ratios

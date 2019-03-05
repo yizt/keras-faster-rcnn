@@ -62,9 +62,9 @@ def nms(boxes, scores, class_logits, max_output_size, iou_threshold=0.5, score_t
     class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
     class_logits = tf.gather(class_logits, indices)
     # padding到固定大小
-    return tf_utils.pad_to_fixed_size(output_boxes, max_output_size), \
-           tf_utils.pad_to_fixed_size(class_scores, max_output_size), \
-           tf_utils.pad_to_fixed_size(class_logits, max_output_size)
+    return [tf_utils.pad_to_fixed_size(output_boxes, max_output_size),
+            tf_utils.pad_to_fixed_size(class_scores, max_output_size),
+            tf_utils.pad_to_fixed_size(class_logits, max_output_size)]
 
 
 class RpnToProposal(keras.layers.Layer):
@@ -74,8 +74,7 @@ class RpnToProposal(keras.layers.Layer):
 
     def __init__(self, batch_size, score_threshold=0.05, output_box_num=2000, iou_threshold=0.7, **kwargs):
         """
-
-        :param batch_size: batch_size
+        :param batch_size:
         :param score_threshold: 分数阈值
         :param output_box_num: 生成proposal 边框数量
         :param iou_threshold: nms iou阈值
@@ -104,9 +103,21 @@ class RpnToProposal(keras.layers.Layer):
         fg_scores = tf.reduce_max(class_scores[..., 1:], axis=-1)  # 第一类为背景 (N,)
 
         # 应用边框回归
+        # proposals = tf.map_fn(lambda x: apply_regress(*x),
+        #                       elems=[deltas, anchors],
+        #                       dtype=tf.float32)
+        # # 非极大抑制
+        # options = {"max_output_size": self.output_box_num,
+        #            "iou_threshold": self.iou_threshold,
+        #            "score_threshold": self.score_threshold,
+        #            "name": "proposals_nms"}
+        #
+        # outputs = tf.map_fn(lambda x: nms(*x, **options),
+        #                     elems=[proposals, fg_scores, class_logits],
+        #                     dtype=[tf.float32] * 3)
+        # # 非极大抑制
         proposals = tf_utils.batch_slice([deltas, anchors], lambda x, y: apply_regress(x, y), self.batch_size)
 
-        # # 非极大抑制
         outputs = tf_utils.batch_slice([proposals, fg_scores, class_logits],
                                        lambda x, y, z: nms(x, y, z,
                                                            max_output_size=self.output_box_num,

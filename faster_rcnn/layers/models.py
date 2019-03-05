@@ -33,14 +33,14 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
     boxes_regress, class_logits = rpn(features, 9)
 
     # 生成anchor
-    anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
+    anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
                      16, name='gen_anchors')(features)
     # 裁剪到窗口内
     anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+        rpn_targets = RpnTarget(256, name='rpn_target')(
             [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         deltas, cls_ids, anchor_indices = rpn_targets[:3]
         # 定义损失layer
@@ -67,22 +67,33 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
     input_image_meta = Input(shape=(12,))
     # 特征及预测结果
     features = resnet50(input_image)
-    # features = resnet_test_net(input_image)
     boxes_regress, class_logits = rpn(features, 9)
 
     # 生成anchor
-    anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
+    anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
                      16, name='gen_anchors')(features)
-    # 裁剪到窗口内
+    # 裁剪到输入形状内
     anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
 
+    # 固定layer
+    tmp_model = Model(inputs=input_image, outputs=[features])
+    for layer in tmp_model.layers:
+        layer.trainable = False
+
     # 应用分类和回归生成proposal
-    proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=1000, iou_threshold=0.7, name='rpn2proposals')(
-        [boxes_regress, class_logits, anchors])
+    proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000 if stage == 'train' else 1000,
+                                         iou_threshold=0.7,
+                                         name='rpn2proposals')([boxes_regress, class_logits, anchors])
+    # proposal裁剪到图像窗口内
+    proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
+    windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
+    proposal_boxes_coordinate = ClipBoxes()([proposal_boxes_coordinate, windows])
+    # 最后再合并tag返回
+    proposal_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([proposal_boxes_coordinate, proposal_boxes_tag])
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+        rpn_targets = RpnTarget(256, name='rpn_target')(
             [gt_boxes, gt_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         rpn_deltas, rpn_cls_ids, anchor_indices = rpn_targets[:3]
         # 定义rpn损失layer
@@ -92,7 +103,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio,
+        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(train_rois_per_image, roi_positive_ratio,
                                                                 name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
@@ -114,14 +125,13 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
         # 处理类别相关
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
-        detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(batch_size,
-                                                                                                score_threshold=0.05,
-                                                                                                output_box_num=100,
-                                                                                                name='proposals2detectboxes')(
+        detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(
+            score_threshold=0.05,
+            output_box_num=100,
+            name='proposals2detectboxes')(
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         # 裁剪到窗口内部
         detect_boxes_coordinate, detect_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(detect_boxes)
-        windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
         detect_boxes_coordinate = ClipBoxes()([detect_boxes_coordinate, windows])
         # 最后再合并tag返回
         detect_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([detect_boxes_coordinate, detect_boxes_tag])

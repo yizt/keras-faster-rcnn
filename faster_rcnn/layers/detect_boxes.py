@@ -7,7 +7,6 @@
 """
 import keras
 import tensorflow as tf
-from faster_rcnn.utils import tf_utils
 from faster_rcnn.utils.tf_utils import apply_regress, pad_to_fixed_size
 
 
@@ -74,10 +73,10 @@ def detect_boxes(boxes, class_logits, max_output_size, iou_threshold=0.5, score_
     output_class_logits = tf.gather(output_class_logits, top_idx)
 
     # 增加padding,返回最终结果
-    return pad_to_fixed_size(output_boxes, max_output_size), \
-           pad_to_fixed_size(tf.expand_dims(output_scores, axis=1), max_output_size), \
-           pad_to_fixed_size(tf.expand_dims(output_class_ids, axis=1), max_output_size), \
-           pad_to_fixed_size(output_class_logits, max_output_size)
+    return [pad_to_fixed_size(output_boxes, max_output_size),
+            pad_to_fixed_size(tf.expand_dims(output_scores, axis=1), max_output_size),
+            pad_to_fixed_size(tf.expand_dims(output_class_ids, axis=1), max_output_size),
+            pad_to_fixed_size(output_class_logits, max_output_size)]
 
 
 class ProposalToDetectBox(keras.layers.Layer):
@@ -85,15 +84,12 @@ class ProposalToDetectBox(keras.layers.Layer):
     根据候选框生成最终的检测框
     """
 
-    def __init__(self, batch_size, score_threshold=0.6, output_box_num=10, iou_threshold=0.3, **kwargs):
+    def __init__(self, score_threshold=0.7, output_box_num=100, iou_threshold=0.3, **kwargs):
         """
-
-        :param batch_size: batch_size
         :param score_threshold: 分数阈值
         :param output_box_num: 生成proposal 边框数量
         :param iou_threshold: nms iou阈值; 由于是类别相关的iou值较低
         """
-        self.batch_size = batch_size
         self.score_threshold = score_threshold
         self.output_box_num = output_box_num
         self.iou_threshold = iou_threshold
@@ -114,15 +110,19 @@ class ProposalToDetectBox(keras.layers.Layer):
         proposals = inputs[2][..., :-1]  # 去除tag列
 
         # 应用边框回归
-        boxes = tf_utils.batch_slice([deltas, proposals], lambda x, y: apply_regress(x, y), self.batch_size)
+
+        boxes = tf.map_fn(lambda x: apply_regress(*x),
+                          elems=[deltas, proposals],
+                          dtype=tf.float32)
 
         # # 非极大抑制
-        outputs = tf_utils.batch_slice([boxes, class_logits],
-                                       lambda x, y: detect_boxes(x, y,
-                                                                 max_output_size=self.output_box_num,
-                                                                 iou_threshold=self.iou_threshold,
-                                                                 score_threshold=self.score_threshold),
-                                       self.batch_size)
+        options = {"max_output_size": self.output_box_num,
+                   "iou_threshold": self.iou_threshold,
+                   "score_threshold": self.score_threshold}
+
+        outputs = tf.map_fn(lambda x: detect_boxes(*x, **options),
+                            elems=[boxes, class_logits],
+                            dtype=[tf.float32] * 2 + [tf.int64] + [tf.float32])
         return outputs
 
     def compute_output_shape(self, input_shape):

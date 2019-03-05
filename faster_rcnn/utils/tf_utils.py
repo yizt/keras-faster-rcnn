@@ -7,27 +7,18 @@ Created on 2018/11/13 10:11
 """
 
 import tensorflow as tf
+from deprecated import deprecated
 
 
-# ## Batch Slicing
-# Some custom layers support a batch size of 1 only, and require a lot of work
-# to support batches greater than 1. This function slices an input tensor
-# across the batch dimension and feeds batches of size 1. Effectively,
-# an easy way to support batches > 1 quickly with little code modification.
-# In the long run, it's more efficient to modify the code to support large
-# batches and getting rid of this function. Consider this a temporary solution
-
-
+@deprecated(reason='建议使用原生tf.map_fn;效率更高,并且不需要显示传入batch_size参数')
 def batch_slice(inputs, graph_fn, batch_size, names=None):
-    """Splits inputs into slices and feeds each slice to a copy of the given
-    computation graph and then combines the results. It allows you to run a
-    graph on a batch of inputs even if the graph is written to support one
-    instance only.
-
-    inputs: list of tensors. All must have the same first dimension length
-    graph_fn: A function that returns a TF tensor that's part of a graph.
-    batch_size: number of slices to divide the data into.
-    names: If provided, assigns names to the resulting tensors.
+    """
+    将输入分片，然后每个分片执行指定计算，最后组合结果;适用于批量处理计算图逻辑只支持一个实例的情况
+    :param inputs: tensor列表
+    :param graph_fn: 计算逻辑
+    :param batch_size:
+    :param names:
+    :return:
     """
     if not isinstance(inputs, list):
         inputs = [inputs]
@@ -39,9 +30,7 @@ def batch_slice(inputs, graph_fn, batch_size, names=None):
         if not isinstance(output_slice, (tuple, list)):
             output_slice = [output_slice]
         outputs.append(output_slice)
-    # Change outputs from a list of slices where each is
-    # a list of outputs to a list of outputs and each has
-    # a list of slices
+
     # 行转列
     outputs = list(zip(*outputs))
 
@@ -57,17 +46,17 @@ def batch_slice(inputs, graph_fn, batch_size, names=None):
     return result
 
 
-def pad_to_fixed_size_with_negative(input_tensor, fixed_size, negative_num):
+def pad_to_fixed_size_with_negative(input_tensor, fixed_size, negative_num, data_type=tf.float32):
     # 输入尺寸
     input_size = tf.shape(input_tensor)[0]
     # tag 列 padding
     positive_num = input_size - negative_num  # 正例数
     # 正样本padding 1,负样本padding -1
-    column_padding = tf.concat([tf.ones([positive_num]),
-                                tf.ones([negative_num]) * -1],
+    column_padding = tf.concat([tf.ones([positive_num], data_type),
+                                tf.ones([negative_num], data_type) * -1],
                                axis=0)
     # 都转为float,拼接
-    x = tf.concat([tf.cast(input_tensor, tf.float32), tf.expand_dims(column_padding, axis=1)], axis=1)
+    x = tf.concat([tf.cast(input_tensor, data_type), tf.expand_dims(column_padding, axis=1)], axis=1)
     # 不够的padding 0
     padding_size = tf.maximum(0, fixed_size - input_size)
     x = tf.pad(x, [[0, padding_size], [0, 0]], mode='CONSTANT', constant_values=0)

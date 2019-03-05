@@ -87,10 +87,21 @@ def main(args):
             m.load_weights(config.pretrained_weights, by_name=True)
         compile(m, config, 1e-3, 0.9)
         m.summary()
+        # 首先训练2/3轮数
+        first_epochs = args.epochs // 3 * 2
+        m.fit_generator(gen,
+                        epochs=first_epochs,
+                        steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
+                        verbose=1,
+                        callbacks=get_call_back('rcnn'))
+        # 然后所有层都微调;训练1/3轮
+        for layer in m.layers:
+            layer.trainable = True
         m.fit_generator(gen,
                         epochs=args.epochs,
                         steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
+                        initial_epoch=first_epochs,
                         callbacks=get_call_back('rcnn'))
         m.save(config.rcnn_weights)
 

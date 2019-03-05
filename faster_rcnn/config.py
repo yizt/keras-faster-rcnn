@@ -203,29 +203,6 @@ class Config(object):
     # Gradient norm clipping
     GRADIENT_CLIP_NORM = 1.0
 
-    def __init__(self):
-        """Set values of computed attributes."""
-        # Effective batch size
-        self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT
-
-        # Input image size
-        if self.IMAGE_RESIZE_MODE == "crop":
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MIN_DIM, self.IMAGE_MIN_DIM, 3])
-        else:
-            self.IMAGE_SHAPE = np.array([self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3])
-
-        # Image meta data length
-        # See compose_image_meta() for details
-        self.IMAGE_META_SIZE = 1 + 3 + 3 + 4 + 1 + self.NUM_CLASSES
-
-    def display(self):
-        """Display Configuration values."""
-        print("\nConfigurations:")
-        for a in dir(self):
-            if not a.startswith("__") and not callable(getattr(self, a)):
-                print("{:30} {}".format(a, getattr(self, a)))
-        print("\n")
-
 
 class VOCConfig(Config):
     # Give the configuration a recognizable name
@@ -237,6 +214,7 @@ class VOCConfig(Config):
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.
     IMAGES_PER_GPU = 2
+    BATCH_SIZE = IMAGES_PER_GPU
 
     # Uncomment to train on 8 GPUs (default is 1)
     # GPU_COUNT = 8
