@@ -12,9 +12,9 @@ from . import np_utils
 def get_detections(boxes, scores, predict_labels, num_classes, score_shreshold=0.05, max_boxes_num=100):
     """
     获取检测信息
-    :param boxes: 检测边框，numpy数组 [num_images,N,(y1,x1,y2,x2,tag)]，tag=0为padding
-    :param scores: 预测得分，numpy数组 [num_images,N,(score,tag)]，tag=0为padding
-    :param predict_labels: 预测类别，numpy数组 [num_images,N,(predict_label,tag)]，tag=0为padding
+    :param boxes: 检测边框，list of numpy [num_images,[n,(y1,x1,y2,x2)]]
+    :param scores: 预测得分，list of numpy [num_images,[n,]]
+    :param predict_labels: 预测类别，list of numpy [num_images,[n,]]，
     :param num_classes: 类别数
     :param score_shreshold: 评分阈值
     :param max_boxes_num:
@@ -22,15 +22,15 @@ def get_detections(boxes, scores, predict_labels, num_classes, score_shreshold=0
              每张图像，每个类别的预测边框；注意num_boxes是变化的；
     """
     # 初始化结果
-    num_images = boxes.shape[0]
-    all_dections = [[None for j in range(num_classes)] for i in range(num_images)]  # (num_images,num_classes)
+    num_images = len(boxes)
+    all_detections = [[None for j in range(num_classes)] for i in range(num_images)]  # (num_images,num_classes)
 
     # 逐个图像处理
     for image_idx in range(num_images):
         # 去除padding
-        cur_boxes = np_utils.remove_pad(boxes[image_idx])  # (n,4)
-        cur_scores = np_utils.remove_pad(scores[image_idx])[:, 0]  # (n,)
-        cur_predict_labels = np_utils.remove_pad(predict_labels[image_idx])[:, 0]  # (n,)
+        cur_boxes = boxes[image_idx]  # (n,4)
+        cur_scores = scores[image_idx]  # (n,)
+        cur_predict_labels = predict_labels[image_idx]  # (n,)
         # 过滤排序
         indices = np.where(cur_scores >= score_shreshold)[0]  # 选中的索引号，tuple的第一个值，一个一维numpy数组
         select_scores = cur_scores[indices]
@@ -47,27 +47,28 @@ def get_detections(boxes, scores, predict_labels, num_classes, score_shreshold=0
 
         # 逐个类别处理
         for class_id in range(num_classes):
-            all_dections[image_idx, class_id] = cur_detections[cur_predict_labels == class_id]
+            all_detections[image_idx][class_id] = cur_detections[cur_predict_labels == class_id]
 
-    return all_dections
+    return all_detections
 
 
-def get_annotations(metas, num_classes):
+def get_annotations(image_info_list, num_classes):
     """
     获取所有的编著
-    :param metas: list of meta, 元数据信息
-                        meta['boxes'] 是(n,4)数组,
-                        meta['labels'] 是(n,1)数组
+    :param image_info_list: list of dict, 图像数据信息
+                        image_info['boxes'] 是(n,4)数组,
+                        image_info['labels'] 是(n,1)数组
     :param num_classes: 类别数
     :return: list of list of numpy(num_boxes,4)  [num_images,[num_classes,[num_gt,(y1,x1,y2,x2)]]]
              每张图像，每个类别的GT边框; 注意num_gt是变化的
     """
-    num_images = len(metas)
+    num_images = len(image_info_list)
     all_annotations = [[None for j in range(num_classes)] for i in range(num_images)]  # (num_images,num_classes)
     for image_idx in range(num_images):
+        gt_boxes = image_info_list[image_idx]['boxes']  # 此图片的GT边框
         for class_id in range(num_classes):
-            indices = np.where(metas[image_idx]['labels'] == class_id)
-            all_annotations[image_idx, class_id] = metas[image_idx]['boxes'][indices]
+            indices = np.where(image_info_list[image_idx]['labels'] == class_id)
+            all_annotations[image_idx][class_id] = gt_boxes[indices]
 
     return all_annotations
 
@@ -120,14 +121,14 @@ def voc_eval(all_annotations, all_detections, iou_threshold=0.5, use_07_metric=F
     :return: ap numpy数组，(num_classes,)
     """
     num_classes = len(all_annotations[0])
-    num_images = len(all_annotations)
+    num_images = len(all_detections)
     average_precisions = {}
     # 逐个类别计算ap
     for class_id in range(num_classes):
-        true_positives = np.zeros((0,))
-        false_positives = np.zeros((0,))
-        scores = np.zeros((0,))
-        num_gt_boxes = 0
+        true_positives = np.zeros((0,), dtype=np.float64)
+        false_positives = np.zeros((0,), dtype=np.float64)
+        scores = np.zeros((0,), dtype=np.float64)
+        num_gt_boxes = 0.0
         # 逐个图像处理
         for image_id in range(num_images):
             gt_boxes = all_annotations[image_id][class_id]  # (n,y1,x1,y2,x2)
@@ -144,7 +145,7 @@ def voc_eval(all_annotations, all_detections, iou_threshold=0.5, use_07_metric=F
                     continue
 
                 # 计算iou
-                iou = np_utils.compute_iou(gt_boxes, np.expand_dims(detect_box[:4], axis=1))  # (n,1)
+                iou = np_utils.compute_iou(gt_boxes, np.expand_dims(detect_box[:4], axis=0))  # n vs 1
                 max_iou = np.max(iou, axis=0)[0]  # 与GT边框的最大iou值
                 argmax_iou = np.argmax(iou, axis=0)[0]  # 最大iou值对应的GT
                 # 如果超过iou阈值,且之前没有检测框匹配
@@ -167,7 +168,7 @@ def voc_eval(all_annotations, all_detections, iou_threshold=0.5, use_07_metric=F
 
         # 计算召回率和精度
         recall = true_positives / num_gt_boxes
-        precision = true_positives / np.max(true_positives + false_positives, np.finfo(np.float64).eps)
+        precision = true_positives / np.maximum(true_positives + false_positives, np.finfo(np.float64).eps)
 
         # 计算ap
         average_precisions[class_id] = voc_ap(recall, precision, use_07_metric=use_07_metric)
