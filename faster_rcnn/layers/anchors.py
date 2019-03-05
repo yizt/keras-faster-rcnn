@@ -11,7 +11,6 @@ anchor层，生成anchors
 import tensorflow as tf
 import keras
 import numpy as np
-from faster_rcnn.utils import tf_utils
 
 
 def generate_anchors(base_size, ratios, scales):
@@ -32,26 +31,6 @@ def generate_anchors(base_size, ratios, scales):
     w = np.reshape(w, (-1, 1))
 
     return np.hstack([-0.5 * h, -0.5 * w, 0.5 * h, 0.5 * w])
-
-
-def clip_boxes(boxes, window):
-    """
-    将boxes裁剪到指定的窗口范围内
-    :param boxes: 边框坐标，[N,(y1,x1,y2,x2)]
-    :param window: 窗口坐标，[(y1,x1,y2,x2)]
-    :return:
-    """
-    wy1, wx1, wy2, wx2 = tf.split(window, 4)
-    y1, x1, y2, x2 = tf.split(boxes, 4, axis=1)  # split后维数不变
-
-    y1 = tf.maximum(tf.minimum(y1, wy2), wy1)  # wy1<=y1<=wy2
-    y2 = tf.maximum(tf.minimum(y2, wy2), wy1)
-    x1 = tf.maximum(tf.minimum(x1, wx2), wx1)
-    x2 = tf.maximum(tf.minimum(x2, wx2), wx1)
-
-    clipped_boxes = tf.concat([y1, x1, y2, x2], axis=1, name='clipped_boxes')
-    # clipped_boxes.([boxes.shape[0], 4])
-    return clipped_boxes
 
 
 def shift(shape, strides, base_anchors):
@@ -112,8 +91,7 @@ class Anchor(keras.layers.Layer):
         :param kwargs:
         :return:
         """
-        features = inputs[0]
-        metas = inputs[1]
+        features = inputs
         features_shape = tf.shape(features)
         print("feature_shape:{}".format(features_shape))
 
@@ -122,11 +100,7 @@ class Anchor(keras.layers.Layer):
         # 扩展第一维，batch_size;每个样本都有相同的anchors
         anchors = tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
 
-        # 裁剪到原始图片所在窗口内
-        clipped_anchors = tf_utils.batch_slice([anchors, metas[:, 7:11]],
-                                               lambda x, y: clip_boxes(x, y),
-                                               self.batch_size)
-        return clipped_anchors
+        return anchors
 
     def compute_output_shape(self, input_shape):
         """
@@ -135,9 +109,9 @@ class Anchor(keras.layers.Layer):
         :return:
         """
         # 计算所有的anchors数量
-        total = np.prod(input_shape[0][1:3]) * self.num_anchors
+        total = np.prod(input_shape[1:3]) * self.num_anchors
         # total = 49 * self.num_anchors
-        return (input_shape[0][0],
+        return (input_shape[0],
                 total, 4)
 
 

@@ -19,7 +19,7 @@ from faster_rcnn.layers.roi_align import RoiAlign
 from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss, detect_regress_loss, detect_cls_loss
 from faster_rcnn.layers.specific_to_agnostic import deal_delta
 from faster_rcnn.layers.detect_boxes import ProposalToDetectBox
-from faster_rcnn.layers.clip_boxes import ClipBoxes
+from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 
 
 def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
@@ -34,7 +34,9 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
 
     # 生成anchor
     anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     16, name='gen_anchors')([features, input_image_meta])
+                     16, name='gen_anchors')(features)
+    # 裁剪到窗口内
+    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
 
     if stage == 'train':
         # 生成分类和回归目标
@@ -70,7 +72,9 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
 
     # 生成anchor
     anchors = Anchor(batch_size, 64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     16, name='gen_anchors')([features, input_image_meta])
+                     16, name='gen_anchors')(features)
+    # 裁剪到窗口内
+    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
 
     # 应用分类和回归生成proposal
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=1000, iou_threshold=0.7, name='rpn2proposals')(
