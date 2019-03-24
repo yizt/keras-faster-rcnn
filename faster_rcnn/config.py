@@ -151,6 +151,7 @@ class VOCConfig(Config):
 
     IMAGE_MIN_DIM = 608
     IMAGE_MAX_DIM = 608
+    IMAGE_INPUT_SHAPE = (IMAGE_MAX_DIM, IMAGE_MAX_DIM, 3)
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.

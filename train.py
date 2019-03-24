@@ -50,7 +50,6 @@ def get_call_back(stage):
 
 
 def main(args):
-
     set_gpu_growth()
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
@@ -60,10 +59,10 @@ def main(args):
     gen = generator(train_img_info, config.IMAGES_PER_GPU, config.IMAGE_MAX_DIM, 50)
     #
     if 'rpn' in args.stages:
-        m = models.rpn_net((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 50, config.IMAGES_PER_GPU)
+        m = models.rpn_net(config)
         m.load_weights(config.pretrained_weights, by_name=True)
         loss_names = ["rpn_bbox_loss", "rpn_class_loss"]
-        models.compile(m, config, 1e-3, 0.9, loss_names)
+        models.compile(m, config, loss_names)
         # 增加个性化度量
         layer = m.get_layer('rpn_target')
         metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
@@ -81,7 +80,7 @@ def main(args):
         m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
                          50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
         loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
-        models.compile(m, config, 1e-3, 0.9, loss_names)
+        models.compile(m, config, loss_names)
         # 增加个性化度量
         layer = m.get_layer('rpn_target')
         metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']

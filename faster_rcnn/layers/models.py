@@ -23,13 +23,13 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 
 
-def rpn_net(image_shape, config, stage='train'):
+def rpn_net(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
     # input_image = Input(shape=image_shape)
     # input_class_ids = Input(shape=(max_gt_num, 1 + 1))
     # input_boxes = Input(shape=(max_gt_num, 4 + 1))
     # input_image_meta = Input(shape=(12,))
-    input_image = Input(batch_shape=(batch_size,) + image_shape)
+    input_image = Input(batch_shape=(batch_size,) + config.IMAGE_INPUT_SHAPE)
     input_class_ids = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 1 + 1))
     input_boxes = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 4 + 1))
     input_image_meta = Input(batch_shape=(batch_size, 12))
