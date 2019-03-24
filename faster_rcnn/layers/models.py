@@ -43,7 +43,7 @@ def rpn_net(config, stage='train'):
                      config.RPN_ANCHOR_SCALES,
                      config.BACKBONE_STRIDE, name='gen_anchors')(features)
     # 裁剪到窗口内
-    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
     # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
     # anchors = ClipBoxes()([anchors, windows])
 
