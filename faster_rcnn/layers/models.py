@@ -153,13 +153,6 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
 
 
-def _get_layer(model, name):
-    for layer in model.layers:
-        if layer.name == name:
-            return layer
-    return None
-
-
 def compile(keras_model, config, learning_rate, momentum, loss_names=[]):
     """
     编译模型，增加损失函数，L2正则化以
@@ -179,7 +172,7 @@ def compile(keras_model, config, learning_rate, momentum, loss_names=[]):
     keras_model._per_input_losses = {}
 
     for name in loss_names:
-        layer = _get_layer(keras_model, name)
+        layer = keras_model.get_layer(name)
         if layer is None or layer.output in keras_model.losses:
             continue
         loss = (tf.reduce_mean(layer.output, keepdims=True)
@@ -203,7 +196,7 @@ def compile(keras_model, config, learning_rate, momentum, loss_names=[]):
     for name in loss_names:
         if name in keras_model.metrics_names:
             continue
-        layer = _get_layer(keras_model, name)
+        layer = keras_model.get_layer(name)
         if layer is None:
             continue
         keras_model.metrics_names.append(name)
