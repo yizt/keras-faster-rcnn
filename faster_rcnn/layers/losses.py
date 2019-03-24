@@ -49,7 +49,7 @@ def smooth_l1_loss(y_true, y_predict):
     """
     abs_diff = tf.abs(y_true - y_predict, name='abs_diff')
     loss = tf.where(tf.less(abs_diff, 1), 0.5 * tf.pow(abs_diff, 2), abs_diff - 0.5)
-    return tf.reduce_mean(loss, axis=1)
+    return loss
 
 
 def rpn_regress_loss(predict_deltas, deltas, indices):
