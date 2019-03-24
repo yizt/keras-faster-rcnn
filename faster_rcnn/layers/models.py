@@ -23,10 +23,14 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 
 
 def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
-    input_image = Input(shape=image_shape)
-    input_class_ids = Input(shape=(max_gt_num, 1 + 1))
-    input_boxes = Input(shape=(max_gt_num, 4 + 1))
-    input_image_meta = Input(shape=(12,))
+    #input_image = Input(shape=image_shape)
+    #input_class_ids = Input(shape=(max_gt_num, 1 + 1))
+    #input_boxes = Input(shape=(max_gt_num, 4 + 1))
+    #input_image_meta = Input(shape=(12,))
+    input_image = Input(batch_shape=(batch_size,)+image_shape)
+    input_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
+    input_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
+    input_image_meta = Input(batch_shape=(batch_size, 12))
     # 特征及预测结果
     features = resnet50(input_image)
     # features = resnet_test_net(input_image)
@@ -36,11 +40,13 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
     anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
                      16, name='gen_anchors')(features)
     # 裁剪到窗口内
-    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    # anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
+    anchors = ClipBoxes()([anchors, windows])
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(256, name='rpn_target')(
+        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
             [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         deltas, cls_ids, anchor_indices = rpn_targets[:3]
         # 定义损失layer
@@ -61,6 +67,10 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
 
 def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train_rois_per_image, roi_positive_ratio,
           stage='train'):
+    #input_image = Input(batch_shape=(batch_size,)+image_shape)
+    #gt_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
+    #gt_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
+    #input_image_meta = Input(batch_shape=(batch_size, 12))
     input_image = Input(shape=image_shape)
     gt_class_ids = Input(shape=(max_gt_num, 1 + 1))
     gt_boxes = Input(shape=(max_gt_num, 4 + 1))
@@ -70,30 +80,32 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
     boxes_regress, class_logits = rpn(features, 9)
 
     # 生成anchor
-    anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
+    anchors = Anchor(128, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
                      16, name='gen_anchors')(features)
     # 裁剪到输入形状内
-    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    # anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
+    anchors = ClipBoxes()([anchors, windows])
 
     # 固定layer
-    tmp_model = Model(inputs=input_image, outputs=[features])
-    for layer in tmp_model.layers:
-        layer.trainable = False
+    #tmp_model = Model(inputs=input_image, outputs=[features])
+    #for layer in tmp_model.layers:
+    #    layer.trainable = False
 
     # 应用分类和回归生成proposal
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000 if stage == 'train' else 1000,
-                                         iou_threshold=0.7,
+                                         iou_threshold=0.8,
                                          name='rpn2proposals')([boxes_regress, class_logits, anchors])
     # proposal裁剪到图像窗口内
     proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
-    windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
+    # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
     proposal_boxes_coordinate = ClipBoxes()([proposal_boxes_coordinate, windows])
     # 最后再合并tag返回
     proposal_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([proposal_boxes_coordinate, proposal_boxes_tag])
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(256, name='rpn_target')(
+        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
             [gt_boxes, gt_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         rpn_deltas, rpn_cls_ids, anchor_indices = rpn_targets[:3]
         # 定义rpn损失layer
@@ -103,7 +115,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(train_rois_per_image, roi_positive_ratio,
+        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio,
                                                                 name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
@@ -239,24 +251,26 @@ def rpn(base_layers, num_anchors):
 def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
     x = RoiAlign(image_max_dim)([base_layers, rois])  #
     # 用卷积来实现两个全连接
-    x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid', name='rcnn_fc1'))(
+    x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
         x)  # 变为(batch_size,roi_num,1,1,channels)
-    x = TimeDistributed(layers.BatchNormalization())(x)
+    #x = TimeDistributed(BatchNorm(), name='rcnn_class_bn1')(x, training=False)
+    x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
     x = layers.Activation(activation='relu')(x)
 
-    x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid', name='rcnn_fc2'))(x)
-    x = TimeDistributed(layers.BatchNormalization())(x)
+    x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
+    #x = TimeDistributed(BatchNorm(), name='rcnn_class_bn2')(x, training=False)
+    x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
     x = layers.Activation(activation='relu')(x)
 
     # 收缩维度
     shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
 
     # 分类
-    class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear', name='rcnn_class_logits'))(
+    class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear'), name='rcnn_class_logits')(
         shared_layer)
 
     # 回归(类别相关)
-    deltas = TimeDistributed(layers.Dense(4 * num_classes, activation='linear', name='rcnn_deltas'))(
+    deltas = TimeDistributed(layers.Dense(4 * num_classes, activation='linear'), name='rcnn_deltas')(
         shared_layer)  # shape (batch_size,roi_num,4*num_classes)
 
     # 变为(batch_size,roi_num,num_classes,4)
@@ -387,6 +401,13 @@ def resnet50(input):
     x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
+    # # 确定精调层
+    no_train_model = Model(inputs=input, outputs=x)
+    for l in no_train_model.layers:
+        if isinstance(l, layers.BatchNormalization):
+            l.trainable = True
+        else:
+            l.trainable = False
 
     x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
@@ -404,13 +425,7 @@ def resnet50(input):
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
 
-    # # 确定精调层
-    # no_train_model = Model(inputs=img_input, outputs=x)
-    # for l in no_train_model.layers:
-    #     if isinstance(l, layers.BatchNormalization):
-    #         l.trainable = True
-    #     else:
-    #         l.trainable = False
+
 
     # model = Model(input, x, name='resnet50')
 
@@ -420,6 +435,23 @@ def resnet50(input):
 def resnet_test_net(input):
     x = Conv2D(512, (1, 1), strides=(32, 32))(input)
     return x
+
+class BatchNorm(keras.layers.BatchNormalization):
+    """Extends the Keras BatchNormalization class to allow a central place
+    to make changes if needed.
+
+    Batch normalization has a negative effect on training if batches are small
+    so this layer is often frozen (via setting in Config class) and functions
+    as linear layer.
+    """
+    def call(self, inputs, training=None):
+        """
+        Note about training values:
+            None: Train BN layers. This is the normal mode
+            False: Freeze BN layers. Good when batch size is small
+            True: (don't use). Set layer in training mode even when making inferences
+        """
+        return super(self.__class__, self).call(inputs, training=training)
 
 
 def main():

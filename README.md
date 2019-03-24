@@ -43,13 +43,13 @@ voc_path = '/opt/dataset/VOCdevkit'
 
 
 
-e) 训练rpn网络; 训练日志见[train.rpn.log](train.rpn.log)  (optional)
+e) 训练rpn网络; 训练日志见[train.rpn.log](log/train.rpn.log)  (optional)
 
 ```shell
 python train.py --stages rpn
 ```
 
-f) end2end 方式联合训练rpn和rcnn ;  训练日志见[train.rcnn.log](train.rcnn.log) ; 
+f) end2end 方式联合训练rpn和rcnn ;  训练日志见[train.rcnn.log](log/train.rcnn.log) ; 
 
 ```shell
 python train.py
@@ -74,7 +74,9 @@ mAP:0.4029819465670427
 
 
 
+裁剪到窗口内：mAP:0.39673756858022424
 
+裁剪到边框内：mAP:0.3270585891336327
 
 ## 预测
 

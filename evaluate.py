@@ -5,6 +5,8 @@
    Author :       mick.yi
    date：          2019/3/4
 """
+import argparse
+import sys
 import numpy as np
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.config import current_config as config
@@ -12,7 +14,7 @@ from faster_rcnn.utils import np_utils, image as image_utils, eval_utils
 from faster_rcnn.layers import models
 
 
-def main():
+def main(args):
     # 加载数据集
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
@@ -22,7 +24,10 @@ def main():
     # 加载模型
     m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 1, config.NUM_CLASSES,
                      50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO, stage='test')
-    m.load_weights(config.rcnn_weights, by_name=True)
+    if args.weight_path is not None:
+        m.load_weights(args.weight_path, by_name=True)
+    else:
+        m.load_weights(config.rcnn_weights, by_name=True)
     m.summary()
     # 预测边框、得分、类别
     predict_boxes = []
@@ -61,4 +66,7 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parse = argparse.ArgumentParser()
+    parse.add_argument("--weight_path", type=str, default=None, help="weight path")
+    argments = parse.parse_args(sys.argv[1:])
+    main(argments)

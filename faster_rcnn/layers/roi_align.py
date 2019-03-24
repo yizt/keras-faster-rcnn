@@ -42,8 +42,8 @@ class RoiAlign(layers.Layer):
 
         # 停止反向传播（注释此部分，引起错误：It is possible you are working with a resizeable TensorArray and
         # stop_gradients is not allowing the gradients to be written）
-        # rois = tf.stop_gradient(rois)
-        # batch_index = tf.stop_gradient(batch_index)
+        rois = tf.stop_gradient(rois)
+        batch_index = tf.stop_gradient(batch_index)
         # RoiAlign
         output = tf.image.crop_and_resize(image=features,
                                           boxes=rois,

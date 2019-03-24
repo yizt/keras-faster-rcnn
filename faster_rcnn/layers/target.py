@@ -163,7 +163,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
 
 
 class RpnTarget(keras.layers.Layer):
-    def __init__(self, train_anchors_per_image, **kwargs):
+    def __init__(self, batch_size, train_anchors_per_image, **kwargs):
         """
 
         :param batch_size: batch_size大小
@@ -172,6 +172,7 @@ class RpnTarget(keras.layers.Layer):
         """
         super(RpnTarget, self).__init__(**kwargs)
         self.train_anchors_per_image = train_anchors_per_image
+        self.batch_size = batch_size
 
     def call(self, inputs, **kwargs):
         """
@@ -187,10 +188,15 @@ class RpnTarget(keras.layers.Layer):
         gt_cls_ids = inputs[1]
         anchors = inputs[2]
 
-        options = {"rpn_train_anchors": self.train_anchors_per_image}
-        outputs = tf.map_fn(lambda x: rpn_targets_graph(*x, **options),
-                            elems=[gt_boxes, gt_cls_ids, anchors],
-                            dtype=[tf.float32] * 2 + [tf.int64] + [tf.float32] * 4)
+        # options = {"rpn_train_anchors": self.train_anchors_per_image}
+        # outputs = tf.map_fn(lambda x: rpn_targets_graph(*x, **options),
+        #                    elems=[gt_boxes, gt_cls_ids, anchors],
+        #                    dtype=[tf.float32] * 2 + [tf.int64] + [tf.float32] * 4)
+
+        outputs = tf_utils.batch_slice(
+            [gt_boxes, gt_cls_ids, anchors],
+            lambda x, y, z:
+            rpn_targets_graph(x, y, z, self.train_anchors_per_image), self.batch_size)
 
         return outputs
 
@@ -238,9 +244,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     gt_iou_argmax = tf.argmax(iou, axis=1)
 
     # GT和对应的proposal
-    gt_boxes_pos_1 = tf.identity(gt_boxes)
-    gt_class_ids_pos_1 = tf.identity(gt_class_ids)
-    proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
+    #gt_boxes_pos_1 = tf.identity(gt_boxes)
+    #gt_class_ids_pos_1 = tf.identity(gt_class_ids)
+    #proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
 
     # 在接下来的操作之前提出已经被选中的proposal
     indices = tf.unique(gt_iou_argmax)[0]  # 被选中的索引
@@ -262,9 +268,12 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     proposal_pos_2 = tf.gather_nd(proposals, proposal_pos_idx)
 
     # 合并两部分正样本
-    gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
-    class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
-    proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
+    #gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
+    #class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
+    #proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
+    gt_boxes_pos = gt_boxes_pos_2
+    class_ids = gt_class_ids_pos_2
+    proposal_pos = proposal_pos_2
 
     # 根据正负样本比确定最终的正样本
     positive_num = tf.minimum(tf.shape(proposal_pos)[0], int(train_rois_per_image * roi_positive_ratio))
@@ -306,7 +315,8 @@ class DetectTarget(keras.layers.Layer):
     检测网络分类和回归目标;同时还要过滤训练的proposals
     """
 
-    def __init__(self, train_rois_per_image=200, roi_positive_ratio=0.33, **kwargs):
+    def __init__(self, batch_size, train_rois_per_image=200, roi_positive_ratio=0.33, **kwargs):
+        self.batch_size = batch_size
         self.train_rois_per_image = train_rois_per_image
         self.roi_positive_ratio = roi_positive_ratio
         super(DetectTarget, self).__init__(**kwargs)
@@ -326,11 +336,15 @@ class DetectTarget(keras.layers.Layer):
         gt_class_ids = inputs[1]
         proposals = inputs[2]
 
-        options = {"train_rois_per_image": self.train_rois_per_image,
-                   "roi_positive_ratio": self.roi_positive_ratio}
-        outputs = tf.map_fn(lambda x: detect_targets_graph(*x, **options),
-                            elems=[gt_boxes, gt_class_ids, proposals],
-                            dtype=[tf.float32] * 4)
+        #options = {"train_rois_per_image": self.train_rois_per_image,
+        #           "roi_positive_ratio": self.roi_positive_ratio}
+        #outputs = tf.map_fn(lambda x: detect_targets_graph(*x, **options),
+        #                    elems=[gt_boxes, gt_class_ids, proposals],
+        #                    dtype=[tf.float32] * 4)
+        outputs = tf_utils.batch_slice([gt_boxes, gt_class_ids, proposals],
+                                       lambda x, y, z: detect_targets_graph(x, y, z, self.train_rois_per_image,
+                                                                            self.roi_positive_ratio),
+                                       self.batch_size)
         return outputs
 
     def compute_output_shape(self, input_shape):

@@ -208,8 +208,8 @@ class VOCConfig(Config):
     # Give the configuration a recognizable name
     NAME = "voc"
 
-    IMAGE_MIN_DIM = 304
-    IMAGE_MAX_DIM = 304
+    IMAGE_MIN_DIM = 608
+    IMAGE_MAX_DIM = 608
 
     # We use a GPU with 12GB memory, which can fit two images.
     # Adjust down if you use a smaller GPU.

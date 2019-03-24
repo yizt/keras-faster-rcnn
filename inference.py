@@ -5,12 +5,12 @@
    Author :       mick.yi
    date：          2019/2/13
 """
+import numpy as np
 import matplotlib
 
 matplotlib.use('Agg')
 
 from matplotlib import pyplot as plt
-import numpy as np
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.image import load_image_gt
 from faster_rcnn.config import current_config as config
