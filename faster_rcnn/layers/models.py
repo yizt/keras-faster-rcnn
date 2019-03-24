@@ -20,14 +20,15 @@ from faster_rcnn.layers.losses import rpn_cls_loss, rpn_regress_loss, detect_reg
 from faster_rcnn.layers.specific_to_agnostic import deal_delta
 from faster_rcnn.layers.detect_boxes import ProposalToDetectBox
 from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
+from faster_rcnn.layers.base_net import resnet50
 
 
 def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
-    #input_image = Input(shape=image_shape)
-    #input_class_ids = Input(shape=(max_gt_num, 1 + 1))
-    #input_boxes = Input(shape=(max_gt_num, 4 + 1))
-    #input_image_meta = Input(shape=(12,))
-    input_image = Input(batch_shape=(batch_size,)+image_shape)
+    # input_image = Input(shape=image_shape)
+    # input_class_ids = Input(shape=(max_gt_num, 1 + 1))
+    # input_boxes = Input(shape=(max_gt_num, 4 + 1))
+    # input_image_meta = Input(shape=(12,))
+    input_image = Input(batch_shape=(batch_size,) + image_shape)
     input_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
     input_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
     input_image_meta = Input(batch_shape=(batch_size, 12))
@@ -67,10 +68,10 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
 
 def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train_rois_per_image, roi_positive_ratio,
           stage='train'):
-    #input_image = Input(batch_shape=(batch_size,)+image_shape)
-    #gt_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
-    #gt_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
-    #input_image_meta = Input(batch_shape=(batch_size, 12))
+    # input_image = Input(batch_shape=(batch_size,)+image_shape)
+    # gt_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
+    # gt_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
+    # input_image_meta = Input(batch_shape=(batch_size, 12))
     input_image = Input(shape=image_shape)
     gt_class_ids = Input(shape=(max_gt_num, 1 + 1))
     gt_boxes = Input(shape=(max_gt_num, 4 + 1))
@@ -88,8 +89,8 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
     anchors = ClipBoxes()([anchors, windows])
 
     # 固定layer
-    #tmp_model = Model(inputs=input_image, outputs=[features])
-    #for layer in tmp_model.layers:
+    # tmp_model = Model(inputs=input_image, outputs=[features])
+    # for layer in tmp_model.layers:
     #    layer.trainable = False
 
     # 应用分类和回归生成proposal
@@ -225,17 +226,6 @@ def add_metrics(keras_model, metric_name_list, metric_tensor_list):
         keras_model.metrics_tensors.append(tensor)
 
 
-#
-#
-# def rpn(base_layers, num_anchors):
-#     x = Conv2D(512, (3, 3), padding='same',
-#                activation='relu', kernel_initializer='normal',
-#                name='rpn_conv1')(base_layers)  
-#     x_class = Conv2D(num_anchors, (1, 1), activation='sigmoid', kernel_initializer='uniform', name='rpn_out_class')(x) 
-#     x_regr = Conv2D(num_anchors * 4, (1, 1), activation='linear', kernel_initializer='zero', name='rpn_out_regress')(
-#         x)  
-#     return [x_class, x_regr, base_layers]
-
 def rpn(base_layers, num_anchors):
     x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv')(
         base_layers)
@@ -253,12 +243,10 @@ def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_lay
     # 用卷积来实现两个全连接
     x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
         x)  # 变为(batch_size,roi_num,1,1,channels)
-    #x = TimeDistributed(BatchNorm(), name='rcnn_class_bn1')(x, training=False)
     x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
     x = layers.Activation(activation='relu')(x)
 
     x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
-    #x = TimeDistributed(BatchNorm(), name='rcnn_class_bn2')(x, training=False)
     x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
     x = layers.Activation(activation='relu')(x)
 
@@ -280,178 +268,9 @@ def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_lay
     return deltas, class_logits
 
 
-def identity_block(input_tensor, kernel_size, filters, stage, block):
-    """The identity block is the block that has no conv layer at shortcut.
-
-    # Arguments
-        input_tensor: input tensor
-        kernel_size: default 3, the kernel size of
-            middle conv layer at main path
-        filters: list of integers, the filters of 3 conv layer at main path
-        stage: integer, current stage label, used for generating layer names
-        block: 'a','b'..., current block label, used for generating layer names
-
-    # Returns
-        Output tensor for the block.
-    """
-    filters1, filters2, filters3 = filters
-    if backend.image_data_format() == 'channels_last':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-    conv_name_base = 'res' + str(stage) + block + '_branch'
-    bn_name_base = 'bn' + str(stage) + block + '_branch'
-
-    x = layers.Conv2D(filters1, (1, 1),
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2a')(input_tensor)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
-    x = layers.Activation('relu')(x)
-
-    x = layers.Conv2D(filters2, kernel_size,
-                      padding='same',
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2b')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
-    x = layers.Activation('relu')(x)
-
-    x = layers.Conv2D(filters3, (1, 1),
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2c')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
-
-    x = layers.add([x, input_tensor])
-    x = layers.Activation('relu')(x)
-    return x
-
-
-def conv_block(input_tensor,
-               kernel_size,
-               filters,
-               stage,
-               block,
-               strides=(2, 2)):
-    """A block that has a conv layer at shortcut.
-
-    # Arguments
-        input_tensor: input tensor
-        kernel_size: default 3, the kernel size of
-            middle conv layer at main path
-        filters: list of integers, the filters of 3 conv layer at main path
-        stage: integer, current stage label, used for generating layer names
-        block: 'a','b'..., current block label, used for generating layer names
-        strides: Strides for the first conv layer in the block.
-
-    # Returns
-        Output tensor for the block.
-
-    Note that from stage 3,
-    the first conv layer at main path is with strides=(2, 2)
-    And the shortcut should have strides=(2, 2) as well
-    """
-    filters1, filters2, filters3 = filters
-    if backend.image_data_format() == 'channels_last':
-        bn_axis = 3
-    else:
-        bn_axis = 1
-    conv_name_base = 'res' + str(stage) + block + '_branch'
-    bn_name_base = 'bn' + str(stage) + block + '_branch'
-
-    x = layers.Conv2D(filters1, (1, 1), strides=strides,
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2a')(input_tensor)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
-    x = layers.Activation('relu')(x)
-
-    x = layers.Conv2D(filters2, kernel_size, padding='same',
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2b')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
-    x = layers.Activation('relu')(x)
-
-    x = layers.Conv2D(filters3, (1, 1),
-                      kernel_initializer='he_normal',
-                      name=conv_name_base + '2c')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
-
-    shortcut = layers.Conv2D(filters3, (1, 1), strides=strides,
-                             kernel_initializer='he_normal',
-                             name=conv_name_base + '1')(input_tensor)
-    shortcut = layers.BatchNormalization(
-        axis=bn_axis, name=bn_name_base + '1')(shortcut)
-
-    x = layers.add([x, shortcut])
-    x = layers.Activation('relu')(x)
-    return x
-
-
-def resnet50(input):
-    # Determine proper input shape
-    bn_axis = 3
-
-    x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(input)
-    x = layers.Conv2D(64, (7, 7),
-                      strides=(2, 2),
-                      padding='valid',
-                      name='conv1')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
-    x = layers.Activation('relu')(x)
-    x = layers.MaxPooling2D((3, 3), strides=(2, 2))(x)
-
-    x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
-    x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
-    x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
-    # # 确定精调层
-    no_train_model = Model(inputs=input, outputs=x)
-    for l in no_train_model.layers:
-        if isinstance(l, layers.BatchNormalization):
-            l.trainable = True
-        else:
-            l.trainable = False
-
-    x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block='c')
-    x = identity_block(x, 3, [128, 128, 512], stage=3, block='d')
-
-    x = conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
-    x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
-
-    # x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
-    # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
-    # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
-
-
-
-    # model = Model(input, x, name='resnet50')
-
-    return x
-
-
 def resnet_test_net(input):
     x = Conv2D(512, (1, 1), strides=(32, 32))(input)
     return x
-
-class BatchNorm(keras.layers.BatchNormalization):
-    """Extends the Keras BatchNormalization class to allow a central place
-    to make changes if needed.
-
-    Batch normalization has a negative effect on training if batches are small
-    so this layer is often frozen (via setting in Config class) and functions
-    as linear layer.
-    """
-    def call(self, inputs, training=None):
-        """
-        Note about training values:
-            None: Train BN layers. This is the normal mode
-            False: Freeze BN layers. Good when batch size is small
-            True: (don't use). Set layer in training mode even when making inferences
-        """
-        return super(self.__class__, self).call(inputs, training=training)
 
 
 def main():
