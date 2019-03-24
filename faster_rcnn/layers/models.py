@@ -23,31 +23,33 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 
 
-def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
+def rpn_net(image_shape, config, stage='train'):
+    batch_size = config.IMAGES_PER_GPU
     # input_image = Input(shape=image_shape)
     # input_class_ids = Input(shape=(max_gt_num, 1 + 1))
     # input_boxes = Input(shape=(max_gt_num, 4 + 1))
     # input_image_meta = Input(shape=(12,))
     input_image = Input(batch_shape=(batch_size,) + image_shape)
-    input_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
-    input_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
+    input_class_ids = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 1 + 1))
+    input_boxes = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 4 + 1))
     input_image_meta = Input(batch_shape=(batch_size, 12))
     # 特征及预测结果
     features = resnet50(input_image)
-    # features = resnet_test_net(input_image)
-    boxes_regress, class_logits = rpn(features, 9)
+    boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(64, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     16, name='gen_anchors')(features)
+    anchors = Anchor(config.RPN_ANCHOR_BASE_SIZE,
+                     config.RPN_ANCHOR_RATIOS,
+                     config.RPN_ANCHOR_SCALES,
+                     config.BACKBONE_STRIDE, name='gen_anchors')(features)
     # 裁剪到窗口内
-    # anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
-    windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
-    anchors = ClipBoxes()([anchors, windows])
+    anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
+    # anchors = ClipBoxes()([anchors, windows])
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+        rpn_targets = RpnTarget(batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, name='rpn_target')(
             [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         deltas, cls_ids, anchor_indices = rpn_targets[:3]
         # 定义损失layer
@@ -60,7 +62,10 @@ def rpn_net(image_shape, max_gt_num, batch_size, stage='train'):
                      outputs=[cls_loss, regress_loss])
     else:  # 测试阶段
         # 应用分类和回归
-        detect_boxes, class_scores, _ = RpnToProposal(batch_size, output_box_num=10, name='rpn2proposals')(
+        detect_boxes, class_scores, _ = RpnToProposal(batch_size,
+                                                      output_box_num=config.POST_NMS_ROIS_INFERENCE,
+                                                      iou_threshold=config.RPN_NMS_THRESHOLD,
+                                                      name='rpn2proposals')(
             [boxes_regress, class_logits, anchors])
         return Model(inputs=[input_image, input_image_meta],
                      outputs=[detect_boxes, class_scores])
@@ -87,11 +92,6 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
     # anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
     windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
     anchors = ClipBoxes()([anchors, windows])
-
-    # 固定layer
-    # tmp_model = Model(inputs=input_image, outputs=[features])
-    # for layer in tmp_model.layers:
-    #    layer.trainable = False
 
     # 应用分类和回归生成proposal
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000 if stage == 'train' else 1000,
@@ -153,20 +153,18 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
 
 
-def compile(keras_model, config, learning_rate, momentum, loss_names=[]):
+def compile(keras_model, config, loss_names=[]):
     """
     编译模型，增加损失函数，L2正则化以
     :param keras_model:
     :param config:
-    :param learning_rate:
-    :param momentum:
     :param loss_names: 损失函数列表
     :return:
     """
     # 优化目标
     optimizer = keras.optimizers.SGD(
-        lr=learning_rate, momentum=momentum,
-        clipnorm=1.0)
+        lr=config.LEARNING_RATE, momentum=config.LEARNING_MOMENTUM,
+        clipnorm=config.GRADIENT_CLIP_NORM)
     # 增加损失函数，首先清除之前的，防止重复
     keras_model._losses = []
     keras_model._per_input_losses = {}
@@ -216,7 +214,7 @@ def add_metrics(keras_model, metric_name_list, metric_tensor_list):
     """
     for name, tensor in zip(metric_name_list, metric_tensor_list):
         keras_model.metrics_names.append(name)
-        keras_model.metrics_tensors.append(tf.reduce_mean(tensor,keepdims=True))
+        keras_model.metrics_tensors.append(tf.reduce_mean(tensor, keepdims=True))
 
 
 def rpn(base_layers, num_anchors):
