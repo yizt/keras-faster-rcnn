@@ -2,6 +2,8 @@
 
 keras 实现论文 [Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks](https://arxiv.org/pdf/1504.08083.pdf) ;主要参考了工程[Mask RCNN](https://github.com/matterport/Mask_RCNN); 给出了在Pascal VOC目标检测数据集上的训练和测试过程;
 
+
+
 [TOC]
 
 ## 依赖
@@ -91,7 +93,7 @@ python inference.py
 ![examples](demo_images/inferece_examples.2.png)
 
 
-## todo
+## toDoList
 0. 评估标准(已完成)
 1. 边框裁剪放到Anchors层外面(已完成)
 2. batch_slice部分重构(已完成)
@@ -99,3 +101,7 @@ python inference.py
 4. GT boxes信息加载部分重构(已完成)
 5. 不同输入尺寸大小精度比较
 6. indices类型改为tf.int64;float32类型转换可能丢失精度(已完成)
+
+
+## 总结
+1. 裁剪到输入比裁剪到窗口效果好

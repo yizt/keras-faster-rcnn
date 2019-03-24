@@ -71,31 +71,34 @@ def rpn_net(config, stage='train'):
                      outputs=[detect_boxes, class_scores])
 
 
-def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train_rois_per_image, roi_positive_ratio,
-          stage='train'):
+def frcnn(config, stage='train'):
+    batch_size = config.IMAGES_PER_GPU
     # input_image = Input(batch_shape=(batch_size,)+image_shape)
     # gt_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
     # gt_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
     # input_image_meta = Input(batch_shape=(batch_size, 12))
-    input_image = Input(shape=image_shape)
-    gt_class_ids = Input(shape=(max_gt_num, 1 + 1))
-    gt_boxes = Input(shape=(max_gt_num, 4 + 1))
+    input_image = Input(shape=config.IMAGE_INPUT_SHAPE)
+    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1))
+    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1))
     input_image_meta = Input(shape=(12,))
     # 特征及预测结果
     features = resnet50(input_image)
-    boxes_regress, class_logits = rpn(features, 9)
+    boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(128, [1, 2, 1 / 2], [1, 2 ** 1, 2 ** 2],
-                     16, name='gen_anchors')(features)
+    anchors = Anchor(config.RPN_ANCHOR_BASE_SIZE,
+                     config.RPN_ANCHOR_RATIOS,
+                     config.RPN_ANCHOR_SCALES,
+                     config.BACKBONE_STRIDE, name='gen_anchors')(features)
     # 裁剪到输入形状内
-    # anchors = UniqueClipBoxes(image_shape, name='clip_anchors')(anchors)
+    anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
     windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
-    anchors = ClipBoxes()([anchors, windows])
+    # anchors = ClipBoxes()([anchors, windows])
 
     # 应用分类和回归生成proposal
-    proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=2000 if stage == 'train' else 1000,
-                                         iou_threshold=0.8,
+    output_box_num = config.POST_NMS_ROIS_TRAINING if stage == 'train' else config.POST_NMS_ROIS_INFERENCE
+    proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=output_box_num,
+                                         iou_threshold=config.RPN_NMS_THRESHOLD,
                                          name='rpn2proposals')([boxes_regress, class_logits, anchors])
     # proposal裁剪到图像窗口内
     proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
@@ -106,7 +109,7 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
 
     if stage == 'train':
         # 生成分类和回归目标
-        rpn_targets = RpnTarget(batch_size, 256, name='rpn_target')(
+        rpn_targets = RpnTarget(batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, name='rpn_target')(
             [gt_boxes, gt_class_ids, anchors])  # [deltas,cls_ids,indices,..]
         rpn_deltas, rpn_cls_ids, anchor_indices = rpn_targets[:3]
         # 定义rpn损失layer
@@ -116,12 +119,12 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, train_rois_per_image, roi_positive_ratio,
-                                                                name='rcnn_target')(
+        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, config.TRAIN_ROIS_PER_IMAGE,
+                                                                config.ROI_POSITIVE_RATIO, name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
-        rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, num_classes, image_max_dim, pool_size=(7, 7),
-                                              fc_layers_size=1024)
+        rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MIN_DIM,
+                                              pool_size=(7, 7), fc_layers_size=1024)
 
         # 检测网络损失函数
         regress_loss_rcnn = Lambda(lambda x: detect_regress_loss(*x), name='rcnn_bbox_loss')(
@@ -133,8 +136,8 @@ def frcnn(image_shape, batch_size, num_classes, max_gt_num, image_max_dim, train
                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
     else:  # 测试阶段
         # 检测网络
-        rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, num_classes, image_max_dim, pool_size=(7, 7),
-                                              fc_layers_size=1024)
+        rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, config.NUM_CLASSES, config.IMAGE_MIN_DIM,
+                                              pool_size=(7, 7), fc_layers_size=1024)
         # 处理类别相关
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
