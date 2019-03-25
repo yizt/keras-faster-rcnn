@@ -25,14 +25,11 @@ from faster_rcnn.layers.base_net import resnet50
 
 def rpn_net(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
-    # input_image = Input(shape=image_shape)
-    # input_class_ids = Input(shape=(max_gt_num, 1 + 1))
-    # input_boxes = Input(shape=(max_gt_num, 4 + 1))
-    # input_image_meta = Input(shape=(12,))
-    input_image = Input(batch_shape=(batch_size,) + config.IMAGE_INPUT_SHAPE)
-    input_class_ids = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 1 + 1))
-    input_boxes = Input(batch_shape=(batch_size, config.MAX_GT_INSTANCES, 4 + 1))
-    input_image_meta = Input(batch_shape=(batch_size, 12))
+    input_image = Input(shape=config.IMAGE_INPUT_SHAPE)
+    input_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1))
+    input_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1))
+    input_image_meta = Input(shape=(12,))
+
     # 特征及预测结果
     features = resnet50(input_image)
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
@@ -73,10 +70,7 @@ def rpn_net(config, stage='train'):
 
 def frcnn(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
-    # input_image = Input(batch_shape=(batch_size,)+image_shape)
-    # gt_class_ids = Input(batch_shape=(batch_size, max_gt_num, 1 + 1))
-    # gt_boxes = Input(batch_shape=(batch_size, max_gt_num, 4 + 1))
-    # input_image_meta = Input(batch_shape=(batch_size, 12))
+    # 输入
     input_image = Input(shape=config.IMAGE_INPUT_SHAPE)
     gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1))
     gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1))
@@ -123,8 +117,8 @@ def frcnn(config, stage='train'):
                                                                 config.ROI_POSITIVE_RATIO, name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
-        rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MIN_DIM,
-                                              pool_size=(7, 7), fc_layers_size=1024)
+        rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
+                                              pool_size=config.POOL_SIZE, fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
 
         # 检测网络损失函数
         regress_loss_rcnn = Lambda(lambda x: detect_regress_loss(*x), name='rcnn_bbox_loss')(
@@ -136,14 +130,15 @@ def frcnn(config, stage='train'):
                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
     else:  # 测试阶段
         # 检测网络
-        rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, config.NUM_CLASSES, config.IMAGE_MIN_DIM,
-                                              pool_size=(7, 7), fc_layers_size=1024)
+        rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
+                                              pool_size=config.POOL_SIZE, fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
         # 处理类别相关
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
         detect_boxes, class_scores, detect_class_ids, detect_class_logits = ProposalToDetectBox(
-            score_threshold=0.05,
-            output_box_num=100,
+            score_threshold=config.DETECTION_MIN_CONFIDENCE,
+            output_box_num=config.DETECTION_MAX_INSTANCES,
+            iou_threshold=config.DETECTION_NMS_THRESHOLD,
             name='proposals2detectboxes')(
             [rcnn_deltas, rcnn_class_logits, proposal_boxes])
         # 裁剪到窗口内部

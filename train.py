@@ -56,7 +56,7 @@ def main(args):
     train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
     print("all_img_info:{}".format(len(train_img_info)))
     # 生成器
-    gen = generator(train_img_info, config.IMAGES_PER_GPU, config.IMAGE_MAX_DIM, 50)
+    gen = generator(train_img_info, config.IMAGES_PER_GPU, config.IMAGE_MAX_DIM, config.MAX_GT_INSTANCES)
     #
     if 'rpn' in args.stages:
         m = models.rpn_net(config)
@@ -73,12 +73,12 @@ def main(args):
                         steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         initial_epoch=args.init_epochs,
+                        use_multiprocessing=True,
                         callbacks=get_call_back('rpn'))
 
         m.save(config.rpn_weights)
     if 'rcnn' in args.stages:
-        m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), config.BATCH_SIZE, config.NUM_CLASSES,
-                         50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO)
+        m = models.frcnn(config)
         loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
         models.compile(m, config, loss_names)
         # 增加个性化度量
@@ -103,6 +103,7 @@ def main(args):
                         steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
                         verbose=1,
                         initial_epoch=args.init_epochs,
+                        use_multiprocessing=True,
                         callbacks=get_call_back('rcnn'))
 
         if args.weight_path is not None:
