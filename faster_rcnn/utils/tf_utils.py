@@ -149,6 +149,16 @@ def clip_boxes(boxes, window):
     return clipped_boxes
 
 
+def scalar_to_1d_tensor(scalar, dtpye=tf.float32):
+    """
+    将标量转为1位张量
+    :param scalar:
+    :param dtpye: 输出数据类型
+    :return:
+    """
+    return tf.expand_dims(tf.cast(scalar, dtype=dtpye), axis=0)
+
+
 def main():
     sess = tf.Session()
     x = sess.run(tf.maximum(3.0, 2.0))

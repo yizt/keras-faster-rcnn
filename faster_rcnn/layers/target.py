@@ -156,10 +156,11 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
     gt_match_min_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # GT匹配anchor最小的IoU
 
-    return [deltas, class_ids, indices, tf.cast(  # 用作度量的必须是浮点类型
-        gt_num, dtype=tf.float32), tf.cast(
-        positive_num, dtype=tf.float32), tf.cast(
-        miss_match_gt_num, dtype=tf.float32), gt_match_min_iou]
+    return [deltas, class_ids, indices,
+            tf_utils.scalar_to_1d_tensor(gt_num),
+            tf_utils.scalar_to_1d_tensor(positive_num),
+            tf_utils.scalar_to_1d_tensor(miss_match_gt_num),
+            tf_utils.scalar_to_1d_tensor(gt_match_min_iou)]
 
 
 class RpnTarget(keras.layers.Layer):
@@ -204,10 +205,10 @@ class RpnTarget(keras.layers.Layer):
         return [(input_shape[0][0], self.train_anchors_per_image, 5),
                 (input_shape[0][0], self.train_anchors_per_image, 2),  # 只有两类
                 (input_shape[0][0], self.train_anchors_per_image, 2),
-                (input_shape[0][0],),
-                (input_shape[0][0],),
-                (input_shape[0][0],),
-                (input_shape[0][0],)]
+                (input_shape[0][0], 1),
+                (input_shape[0][0], 1),
+                (input_shape[0][0], 1),
+                (input_shape[0][0], 1)]
 
 
 def shuffle_sample(tensor_list, tensor_size, sample_size):
@@ -244,9 +245,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     gt_iou_argmax = tf.argmax(iou, axis=1)
 
     # GT和对应的proposal
-    #gt_boxes_pos_1 = tf.identity(gt_boxes)
-    #gt_class_ids_pos_1 = tf.identity(gt_class_ids)
-    #proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
+    # gt_boxes_pos_1 = tf.identity(gt_boxes)
+    # gt_class_ids_pos_1 = tf.identity(gt_class_ids)
+    # proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
 
     # 在接下来的操作之前提出已经被选中的proposal
     indices = tf.unique(gt_iou_argmax)[0]  # 被选中的索引
@@ -268,9 +269,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     proposal_pos_2 = tf.gather_nd(proposals, proposal_pos_idx)
 
     # 合并两部分正样本
-    #gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
-    #class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
-    #proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
+    # gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
+    # class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
+    # proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
     gt_boxes_pos = gt_boxes_pos_2
     class_ids = gt_class_ids_pos_2
     proposal_pos = proposal_pos_2
@@ -307,7 +308,7 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     # 其它统计指标
     gt_num = tf.shape(gt_class_ids)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(gt_pos_idx)[0])[0]  # 未分配anchor的GT
-    return [deltas, class_ids, train_rois, tf.cast(miss_match_gt_num, tf.float32)]
+    return [deltas, class_ids, train_rois, tf_utils.scalar_to_1d_tensor(miss_match_gt_num)]
 
 
 class DetectTarget(keras.layers.Layer):
@@ -336,9 +337,9 @@ class DetectTarget(keras.layers.Layer):
         gt_class_ids = inputs[1]
         proposals = inputs[2]
 
-        #options = {"train_rois_per_image": self.train_rois_per_image,
+        # options = {"train_rois_per_image": self.train_rois_per_image,
         #           "roi_positive_ratio": self.roi_positive_ratio}
-        #outputs = tf.map_fn(lambda x: detect_targets_graph(*x, **options),
+        # outputs = tf.map_fn(lambda x: detect_targets_graph(*x, **options),
         #                    elems=[gt_boxes, gt_class_ids, proposals],
         #                    dtype=[tf.float32] * 4)
         outputs = tf_utils.batch_slice([gt_boxes, gt_class_ids, proposals],
@@ -351,7 +352,7 @@ class DetectTarget(keras.layers.Layer):
         return [(input_shape[0][0], self.train_rois_per_image, 4 + 1),  # deltas
                 (input_shape[0][0], self.train_rois_per_image, 1 + 1),  # class_ids
                 (input_shape[0][0], self.train_rois_per_image, 4 + 1),
-                (input_shape[0][0],)]  # miss_match_gt_num
+                (input_shape[0][0], 1)]  # miss_match_gt_num
 
 
 def main():
