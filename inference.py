@@ -32,8 +32,7 @@ def main():
     all_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 测试集
 
     # 加载模型
-    m = models.frcnn((config.IMAGE_MAX_DIM, config.IMAGE_MAX_DIM, 3), 1, config.NUM_CLASSES,
-                     50, config.IMAGE_MAX_DIM, config.TRAIN_ROIS_PER_IMAGE, config.ROI_POSITIVE_RATIO, stage='test')
+    m = models.frcnn(config, stage='test')
     m.load_weights(config.rcnn_weights, by_name=True)
     m.summary()
 
