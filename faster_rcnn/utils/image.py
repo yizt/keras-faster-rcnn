@@ -43,7 +43,8 @@ def load_image_gt(image_id, image_path, output_size, gt_boxes=None):
     image = load_image(image_path)
     original_shape = image.shape
     # resize图像，并获取相关元数据信息
-    image, window, scale, padding = resize_image(image, output_size)
+    h, w, window, scale, padding = resize_meta(original_shape[0], original_shape[1], output_size)
+    image = resize_image(image, h, w, padding)
 
     # 组合元数据信息
     image_meta = compose_image_meta(image_id, original_shape, image.shape,
@@ -55,28 +56,44 @@ def load_image_gt(image_id, image_path, output_size, gt_boxes=None):
     return image, image_meta, gt_boxes
 
 
-def resize_image(image, max_dim):
+def resize_image(image, h, w, padding):
     """
     缩放图像为正方形，指定长边大小，短边padding;
     :param image: numpy 数组(H,W,3)
-    :param max_dim: 长边大小
+    :param h: 缩放后的高度
+    :param w: 缩放后的宽度
+    :param padding:缩放后增加的padding
     :return: 缩放后的图像,元素图像的宽口位置，缩放尺寸，padding
     """
     image_dtype = image.dtype
-    h, w = image.shape[:2]
+    image = transform.resize(image, (h, w), order=1, mode='constant',
+                             cval=0, clip=True, preserve_range=True)
+
+    image = np.pad(image, padding, mode='constant', constant_values=0)
+    return image.astype(image_dtype)
+
+
+def resize_meta(h, w, max_dim):
+    """
+    计算resize的元数据信息
+    :param h: 图像原始高度
+    :param w: 图像原始宽度
+    :param max_dim: 缩放后的边长
+    :return:
+    """
     scale = max_dim / max(h, w)  # 缩放尺寸
-    image = transform.resize(image, (round(h * scale), round(w * scale)),
-                             order=1, mode='constant', cval=0, clip=True, preserve_range=True)
-    h, w = image.shape[:2]
+    # 新的高度和宽度
+    h, w = round(h * scale), round(w * scale)
+
     # 计算padding
     top_pad = (max_dim - h) // 2
     bottom_pad = max_dim - h - top_pad
     left_pad = (max_dim - w) // 2
     right_pad = max_dim - w - left_pad
     padding = [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
-    image = np.pad(image, padding, mode='constant', constant_values=0)
+    # 计算窗口
     window = (top_pad, left_pad, h + top_pad, w + left_pad)  #
-    return image.astype(image_dtype), window, scale, padding
+    return h, w, window, scale, padding
 
 
 def compose_image_meta(image_id, original_image_shape, image_shape,
