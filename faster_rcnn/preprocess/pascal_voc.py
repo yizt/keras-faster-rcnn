@@ -114,10 +114,10 @@ def get_voc_data(input_path, class_mapping={}):
                         class_mapping[class_name] = len(class_mapping) + 1
 
                     obj_bbox = element_obj.find('bndbox')
-                    x1 = int(round(float(obj_bbox.find('xmin').text)))
-                    y1 = int(round(float(obj_bbox.find('ymin').text)))
-                    x2 = int(round(float(obj_bbox.find('xmax').text)))
-                    y2 = int(round(float(obj_bbox.find('ymax').text)))
+                    x1 = float(obj_bbox.find('xmin').text)
+                    y1 = float(obj_bbox.find('ymin').text)
+                    x2 = float(obj_bbox.find('xmax').text)
+                    y2 = float(obj_bbox.find('ymax').text)
                     difficulty = int(element_obj.find('difficult').text) == 1
                     annotation_data['bboxes'].append(
                         {'class_name': class_name,
