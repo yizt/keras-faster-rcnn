@@ -19,10 +19,14 @@ class Config(object):
     # RCNN网络全连接层大小
     RCNN_FC_LAYERS_SIZE = 1024
     # #####anchors######
+    RPN_ANCHOR_HEIGHTS = None
+    RPN_ANCHOR_WIDTHS = None
+    # 指定了anchor长宽，就不用指定base_size,scale,ratio
     RPN_ANCHOR_BASE_SIZE = 64
     RPN_ANCHOR_SCALES = [1, 2 ** 1, 2 ** 2]
     RPN_ANCHOR_RATIOS = [0.5, 1, 2]
-    RPN_ANCHOR_NUM = len(RPN_ANCHOR_SCALES) * len(RPN_ANCHOR_RATIOS)
+    RPN_ANCHOR_NUM = len(RPN_ANCHOR_HEIGHTS) if RPN_ANCHOR_HEIGHTS is not None \
+        else len(RPN_ANCHOR_SCALES) * len(RPN_ANCHOR_RATIOS)
 
     # RPN提议框非极大抑制阈值(训练时可以增加该值来增加提议框)
     RPN_NMS_THRESHOLD = 0.7

@@ -13,19 +13,25 @@ import keras
 import numpy as np
 
 
-def generate_anchors(base_size, ratios, scales):
+def generate_anchors(heights, widths, base_size, ratios, scales):
     """
+    :param heights: anchor高度列表
+    :param widths: anchor宽度列表
     根据基准尺寸、长宽比、缩放比生成边框
-    :param base_size: anchor的base_size,如：（64，64）
+    :param base_size: anchor的base_size,如：64
     :param ratios: 长宽比 shape:(M,)
     :param scales: 缩放比 shape:(N,)
     :return: （N*M,(y1,x1,y2,x2))
     """
-    ratios = np.expand_dims(np.array(ratios), axis=1)  # (N,1)
-    scales = np.expand_dims(np.array(scales), axis=0)  # (1,M)
-    # 计算高度和宽度，形状为(N,M)
-    h = np.sqrt(ratios) * scales * base_size
-    w = 1.0 / np.sqrt(ratios) * scales * base_size
+    if base_size is not None:
+        ratios = np.expand_dims(np.array(ratios), axis=1)  # (N,1)
+        scales = np.expand_dims(np.array(scales), axis=0)  # (1,M)
+        # 计算高度和宽度，形状为(N,M)
+        h = np.sqrt(ratios) * scales * base_size
+        w = 1.0 / np.sqrt(ratios) * scales * base_size
+    else:
+        h = np.array(heights, np.float32)
+        w = np.array(widths, np.float32)
     # reshape为（N*M,1)
     h = np.reshape(h, (-1, 1))
     w = np.reshape(w, (-1, 1))
@@ -63,21 +69,23 @@ def shift(shape, strides, base_anchors):
 
 
 class Anchor(keras.layers.Layer):
-    def __init__(self, base_size, ratios, scales, strides, **kwargs):
+    def __init__(self, heights=None, widths=None, base_size=None, ratios=None, scales=None, strides=None, **kwargs):
         """
-
+        :param heights: anchor高度列表
+        :param widths: anchor宽度列表
         :param base_size: anchor的base_size,如：64
         :param ratios: 长宽比; 如 [1,1/2,2]
         :param scales: 缩放比: 如 [1,2,4]
         :param strides: 步长,一般为base_size的四分之一
         """
+        self.heights = heights
+        self.widths = widths
         self.base_size = base_size
         self.strides = strides
         self.ratios = ratios
         self.scales = scales
         # base anchors数量
-        self.num_anchors = len(ratios) * len(scales)
-        self.name = 'anchors'
+        self.num_anchors = len(heights) if heights is not None else len(ratios) * len(scales)
         super(Anchor, self).__init__(**kwargs)
 
     def call(self, inputs, **kwargs):
@@ -93,7 +101,7 @@ class Anchor(keras.layers.Layer):
         features_shape = tf.shape(features)
         print("feature_shape:{}".format(features_shape))
 
-        base_anchors = generate_anchors(self.base_size, self.ratios, self.scales)
+        base_anchors = generate_anchors(self.heights, self.widths, self.base_size, self.ratios, self.scales)
         anchors = shift(features_shape[1:3], self.strides, base_anchors)
         # 扩展第一维，batch_size;每个样本都有相同的anchors
         anchors = tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])

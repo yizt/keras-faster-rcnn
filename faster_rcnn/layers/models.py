@@ -35,7 +35,9 @@ def rpn_net(config, stage='train'):
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(config.RPN_ANCHOR_BASE_SIZE,
+    anchors = Anchor(config.RPN_ANCHOR_HEIGHTS,
+                     config.RPN_ANCHOR_WIDTHS,
+                     config.RPN_ANCHOR_BASE_SIZE,
                      config.RPN_ANCHOR_RATIOS,
                      config.RPN_ANCHOR_SCALES,
                      config.BACKBONE_STRIDE, name='gen_anchors')(features)
@@ -80,7 +82,9 @@ def frcnn(config, stage='train'):
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(config.RPN_ANCHOR_BASE_SIZE,
+    anchors = Anchor(config.RPN_ANCHOR_HEIGHTS,
+                     config.RPN_ANCHOR_WIDTHS,
+                     config.RPN_ANCHOR_BASE_SIZE,
                      config.RPN_ANCHOR_RATIOS,
                      config.RPN_ANCHOR_SCALES,
                      config.BACKBONE_STRIDE, name='gen_anchors')(features)
