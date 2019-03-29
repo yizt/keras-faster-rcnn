@@ -7,6 +7,7 @@
 """
 import argparse
 import sys
+import time
 import numpy as np
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.config import current_config as config
@@ -14,12 +15,32 @@ from faster_rcnn.utils import np_utils, image as image_utils, eval_utils
 from faster_rcnn.layers import models
 
 
+def generator(image_info_list, max_output_dim):
+    """
+    评估生成器
+    :param image_info_list: 字典列表
+    :param max_output_dim:
+    :return:
+    """
+    for idx, image_info in enumerate(image_info_list):
+        image, image_meta, _ = image_utils.load_image_gt(np.random.randint(10),
+                                                         image_info['filepath'],
+                                                         max_output_dim,
+                                                         None)
+        if idx % 200 == 0:
+            print("开始预测:{}张图像".format(idx))
+        yield [np.asarray([image]),
+               np.asarray([image_meta])]
+
+
 def main(args):
+    # 覆盖参数
+    config.IMAGES_PER_GPU = 1
     # 加载数据集
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     print("len:{}".format(len(dataset.get_image_info_list())))
-    test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == 'test']
+    test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']
     print("len:{}".format(len(test_image_info_list)))
     # 加载模型
     m = models.frcnn(config, stage='test')
@@ -27,32 +48,21 @@ def main(args):
         m.load_weights(args.weight_path, by_name=True)
     else:
         m.load_weights(config.rcnn_weights, by_name=True)
-    m.summary()
+    # m.summary()
     # 预测边框、得分、类别
-    predict_boxes = []
-    predict_scores = []
-    predict_labels = []
-    # 逐个图像处理
-    for id in range(len(test_image_info_list)):
-        image, image_meta, _ = image_utils.load_image_gt(id,
-                                                         test_image_info_list[id]['filepath'],
-                                                         config.IMAGE_MAX_DIM,
-                                                         test_image_info_list[id]['boxes'])
-        boxes, scores, class_ids, class_logits = m.predict(
-            [np.expand_dims(image, axis=0), np.expand_dims(image_meta, axis=0)])
-        boxes = np_utils.remove_pad(boxes[0])
-        scores = np_utils.remove_pad(scores[0])[:, 0]
-        class_ids = np_utils.remove_pad(class_ids[0])[:, 0]
-        # 还原检测边框到
-        window = image_meta[7:11]
-        scale = image_meta[11]
-        boxes = image_utils.recover_detect_boxes(boxes, window, scale)
-        # 添加到列表中
-        predict_boxes.append(boxes)
-        predict_scores.append(scores)
-        predict_labels.append(class_ids)
-        if id % 100 == 0:
-            print('预测完成：{}'.format(id + 1))
+    s_time = time.time()
+    boxes, scores, class_ids, _, image_metas = m.predict_generator(
+        generator(test_image_info_list, config.IMAGE_MAX_DIM),
+        steps=len(test_image_info_list),
+        use_multiprocessing=True)
+    print("预测 {} 张图像,耗时：{} 秒".format(len(test_image_info_list), time.time() - s_time))
+    # 去除padding
+    image_metas = image_utils.batch_parse_image_meta(image_metas)
+    predict_scores = [np_utils.remove_pad(score)[:, 0] for score in scores]
+    predict_labels = [np_utils.remove_pad(label)[:, 0] for label in class_ids]
+    # 还原检测边框到
+    predict_boxes = [image_utils.recover_detect_boxes(np_utils.remove_pad(box), window, scale)
+                     for box, window, scale in zip(boxes, image_metas['window'], image_metas['scale'])]
 
     # 以下是评估过程
     annotations = eval_utils.get_annotations(test_image_info_list, config.NUM_CLASSES)
@@ -62,6 +72,7 @@ def main(args):
     # 求mean ap 去除背景类
     mAP = np.mean(np.array(list(average_precisions.values()))[1:])
     print("mAP:{}".format(mAP))
+    print("整个评估过程耗时：{} 秒".format(time.time() - s_time))
 
 
 if __name__ == '__main__':

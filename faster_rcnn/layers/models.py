@@ -146,9 +146,9 @@ def frcnn(config, stage='train'):
         detect_boxes_coordinate = ClipBoxes()([detect_boxes_coordinate, windows])
         # 最后再合并tag返回
         detect_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([detect_boxes_coordinate, detect_boxes_tag])
-
+        image_meta = Lambda(lambda x: tf.identity(x))(input_image_meta)  # 原样返回
         return Model(inputs=[input_image, input_image_meta],
-                     outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits])
+                     outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits, image_meta])
 
 
 def compile(keras_model, config, loss_names=[]):
