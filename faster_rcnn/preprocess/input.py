@@ -46,6 +46,8 @@ class VocDataset(Dataset):
         for img_info in img_info_list:
             image_info = {"filename": img_info['filename'],
                           "filepath": img_info['filepath'],
+                          "height": img_info['height'],
+                          "width": img_info['width'],
                           "type": img_info['imageset']}
             # GT 边框转换
             boxes = []
