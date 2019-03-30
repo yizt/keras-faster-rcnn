@@ -61,7 +61,7 @@ class Config(object):
     LEARNING_RATE = 0.001
     LEARNING_MOMENTUM = 0.9
     # 权重衰减
-    WEIGHT_DECAY = 0.0001
+    WEIGHT_DECAY = 0.0005
     # 梯度裁剪
     GRADIENT_CLIP_NORM = 1.0
 
@@ -77,10 +77,11 @@ class Config(object):
 class VOCConfig(Config):
     NAME = "voc"
     NUM_CLASSES = 1 + 20  #
-    IMAGE_MAX_DIM = 304
-    IMAGE_INPUT_SHAPE = (304, 304, 3)
-    RPN_ANCHOR_HEIGHTS = [36.03, 162.62, 105.93, 206.06, 93.86]
-    RPN_ANCHOR_WIDTHS = [30.16, 257.44, 66.12, 136.73, 149.83]
+    IMAGE_MAX_DIM = 720
+    LEARNING_RATE = 0.01
+    IMAGE_INPUT_SHAPE = (720, 720, 3)
+    RPN_ANCHOR_HEIGHTS = [258.15, 87.23, 226.65, 386.09, 491.17]
+    RPN_ANCHOR_WIDTHS = [163.03, 73.11, 369.82, 617.81, 331.97]
     RPN_ANCHOR_NUM = len(RPN_ANCHOR_HEIGHTS)
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,

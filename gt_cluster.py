@@ -52,7 +52,7 @@ def main():
     gt_boxes = np.concatenate(gt_boxes_list, axis=0)  # 合并
     # 对高度和宽度聚类
     h, w = gt_boxes_cluster(gt_boxes, 5)
-    print("h:{} \n w:{}".format(h, w))
+    print("h:{} \nw:{}".format(h, w))
     print("ratio:{}".format([round(x[0] / x[1], 2) for x in zip(h, w)]))
 
 
