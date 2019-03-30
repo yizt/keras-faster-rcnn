@@ -79,7 +79,9 @@ class VOCConfig(Config):
     NUM_CLASSES = 1 + 20  #
     IMAGE_MAX_DIM = 304
     IMAGE_INPUT_SHAPE = (304, 304, 3)
-    RPN_ANCHOR_BASE_SIZE = 32
+    RPN_ANCHOR_HEIGHTS = [36.03, 162.62, 105.93, 206.06, 93.86]
+    RPN_ANCHOR_WIDTHS = [30.16, 257.44, 66.12, 136.73, 149.83]
+    RPN_ANCHOR_NUM = len(RPN_ANCHOR_HEIGHTS)
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
                      'dog': 2,
@@ -115,7 +117,7 @@ class LocalVOCConfig(VOCConfig):
     voc_path = r'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
 
 
-class MacVoConfig():
+class MacVoConfig(VOCConfig):
     voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
     pretrained_weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
