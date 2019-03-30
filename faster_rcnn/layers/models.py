@@ -238,10 +238,12 @@ def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_lay
         x)  # 变为(batch_size,roi_num,1,1,channels)
     x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
     x = layers.Activation(activation='relu')(x)
+    x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
 
     x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
     x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
     x = layers.Activation(activation='relu')(x)
+    x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
 
     # 收缩维度
     shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
