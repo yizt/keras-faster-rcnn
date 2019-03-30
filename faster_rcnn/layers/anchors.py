@@ -23,15 +23,16 @@ def generate_anchors(heights, widths, base_size, ratios, scales):
     :param scales: 缩放比 shape:(N,)
     :return: （N*M,(y1,x1,y2,x2))
     """
-    if base_size is not None:
+    if heights is not None:
+        h = np.array(heights, np.float32)
+        w = np.array(widths, np.float32)
+    else:
         ratios = np.expand_dims(np.array(ratios), axis=1)  # (N,1)
         scales = np.expand_dims(np.array(scales), axis=0)  # (1,M)
         # 计算高度和宽度，形状为(N,M)
         h = np.sqrt(ratios) * scales * base_size
         w = 1.0 / np.sqrt(ratios) * scales * base_size
-    else:
-        h = np.array(heights, np.float32)
-        w = np.array(widths, np.float32)
+
     # reshape为（N*M,1)
     h = np.reshape(h, (-1, 1))
     w = np.reshape(w, (-1, 1))
