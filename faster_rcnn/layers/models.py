@@ -21,6 +21,7 @@ from faster_rcnn.layers.specific_to_agnostic import deal_delta
 from faster_rcnn.layers.detect_boxes import ProposalToDetectBox
 from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
+from faster_rcnn.utils.parallel_model import ParallelModel
 
 
 def rpn_net(config, stage='train'):
@@ -130,8 +131,12 @@ def frcnn(config, stage='train'):
         cls_loss_rcnn = Lambda(lambda x: detect_cls_loss(*x), name='rcnn_class_loss')(
             [rcnn_class_logits, roi_class_ids])
 
-        return Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
-                     outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
+        model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
+                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
+        # 多gpu训练
+        if config.GPU_COUNT > 1:
+            model = ParallelModel(model, config.GPU_COUNT)
+        return model
     else:  # 测试阶段
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, config.NUM_CLASSES, config.IMAGE_MAX_DIM,

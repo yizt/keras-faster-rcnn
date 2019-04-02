@@ -36,6 +36,7 @@ def generator(image_info_list, max_output_dim):
 def main(args):
     # 覆盖参数
     config.IMAGES_PER_GPU = 1
+    config.GPU_COUNT = 1
     # 加载数据集
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()

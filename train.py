@@ -20,9 +20,9 @@ from faster_rcnn.layers import models
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
 
-def set_gpu_growth():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-    cfg = tf.ConfigProto()
+def set_gpu_growth(gpu_count):
+    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(i) for i in range(gpu_count)])
+    cfg = tf.ConfigProto(allow_soft_placement=True)  # because no supported kernel for GPU devices is available
     cfg.gpu_options.allow_growth = True
     session = tf.Session(config=cfg)
     keras.backend.set_session(session)
@@ -50,13 +50,13 @@ def get_call_back(stage):
 
 
 def main(args):
-    set_gpu_growth()
+    set_gpu_growth(config.GPU_COUNT)
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
     print("all_img_info:{}".format(len(train_img_info)))
     # 生成器
-    gen = generator(train_img_info, config.IMAGES_PER_GPU, config.IMAGE_MAX_DIM, config.MAX_GT_INSTANCES)
+    gen = generator(train_img_info, config.BATCH_SIZE, config.IMAGE_MAX_DIM, config.MAX_GT_INSTANCES)
     #
     if 'rpn' in args.stages:
         m = models.rpn_net(config)
@@ -70,7 +70,7 @@ def main(args):
         m.summary()
         m.fit_generator(gen,
                         epochs=args.epochs,
-                        steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
+                        steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
                         verbose=1,
                         initial_epoch=args.init_epochs,
                         use_multiprocessing=True,
@@ -81,14 +81,14 @@ def main(args):
         m = models.frcnn(config)
         loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
         models.compile(m, config, loss_names)
-        # 增加个性化度量
-        layer = m.get_layer('rpn_target')
-        metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
-        models.add_metrics(m, metric_names, layer.output[-4:])
-
-        layer = m.get_layer('rcnn_target')
-        metric_names = ['rcnn_miss_match_gt_num']
-        models.add_metrics(m, metric_names, layer.output[-1:])
+        # # 增加个性化度量
+        # layer = m.inner_model.get_layer('rpn_target')
+        # metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
+        # models.add_metrics(m, metric_names, layer.output[-4:])
+        #
+        # layer = m.inner_model.get_layer('rcnn_target')
+        # metric_names = ['rcnn_miss_match_gt_num']
+        # models.add_metrics(m, metric_names, layer.output[-1:])
         # 加载预训练模型
         if args.init_epochs > 0:
             m.load_weights(args.init_weight_path, by_name=True)
@@ -100,7 +100,7 @@ def main(args):
         # 训练
         m.fit_generator(gen,
                         epochs=args.epochs,
-                        steps_per_epoch=len(train_img_info) // config.IMAGES_PER_GPU,
+                        steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
                         verbose=1,
                         initial_epoch=args.init_epochs,
                         use_multiprocessing=True,

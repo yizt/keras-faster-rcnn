@@ -110,9 +110,6 @@ class ParallelModel(KM.Model):
         super(ParallelModel, self).summary(*args, **kwargs)
         self.inner_model.summary(*args, **kwargs)
 
-    def get_layer(self, *args, **kwargs):
-        return self.inner_model.get_layer(*args, **kwargs)
-
 
 if __name__ == "__main__":
     # Testing code below. It creates a simple model to train on MNIST and

@@ -159,7 +159,7 @@ def batch_parse_image_meta(meta):
 
 def adjust_box(boxes, padding, scale):
     """
-    根据填充和缩放因子，调整bocompose_image_metaxes的值
+    根据填充和缩放因子，调整boxes的值
     :param boxes: numpy 数组; GT boxes [N,(y1,x1,y2,x2)]
     :param padding: [(top_pad, bottom_pad), (left_pad, right_pad), (0, 0)]
     :param scale: 缩放因子
