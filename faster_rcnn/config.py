@@ -8,7 +8,6 @@ class Config(object):
     NUM_CLASSES = 1
     # 输入图像大小
     IMAGE_MAX_DIM = 608
-    IMAGE_INPUT_SHAPE = (IMAGE_MAX_DIM, IMAGE_MAX_DIM, 3)
     # 最大GT个数
     MAX_GT_INSTANCES = 50
     # ####网络参数######
@@ -25,8 +24,6 @@ class Config(object):
     RPN_ANCHOR_BASE_SIZE = 64
     RPN_ANCHOR_SCALES = [1, 2 ** 1, 2 ** 2]
     RPN_ANCHOR_RATIOS = [0.5, 1, 2]
-    RPN_ANCHOR_NUM = len(RPN_ANCHOR_HEIGHTS) if RPN_ANCHOR_HEIGHTS is not None \
-        else len(RPN_ANCHOR_SCALES) * len(RPN_ANCHOR_RATIOS)
 
     # RPN提议框非极大抑制阈值(训练时可以增加该值来增加提议框)
     RPN_NMS_THRESHOLD = 0.7
@@ -56,8 +53,8 @@ class Config(object):
     DETECTION_NMS_THRESHOLD = 0.3
 
     # ####训练参数#######
+    GPU_COUNT = 1
     IMAGES_PER_GPU = 2
-    BATCH_SIZE = IMAGES_PER_GPU
     LEARNING_RATE = 0.001
     LEARNING_MOMENTUM = 0.9
     # 权重衰减
@@ -73,16 +70,24 @@ class Config(object):
         "rcnn_bbox_loss": 1.
     }
 
+    def __init__(self):
+        self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT  # batch_size是GPU数乘每个gpu处理图片数
+        self.IMAGE_INPUT_SHAPE = (self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3)
+        # 如果知道长宽就用指定的，没有指定就使用尺寸个数乘缩放比个数
+        self.RPN_ANCHOR_NUM = len(self.RPN_ANCHOR_HEIGHTS) if self.RPN_ANCHOR_HEIGHTS is not None \
+            else len(self.RPN_ANCHOR_SCALES) * len(self.RPN_ANCHOR_RATIOS)
+
 
 class VOCConfig(Config):
     NAME = "voc"
+    GPU_COUNT = 2
+    IMAGES_PER_GPU = 2
     NUM_CLASSES = 1 + 20  #
     IMAGE_MAX_DIM = 720
-    LEARNING_RATE = 0.01
-    IMAGE_INPUT_SHAPE = (720, 720, 3)
+
     RPN_ANCHOR_HEIGHTS = [258.15, 87.23, 226.65, 386.09, 491.17]
     RPN_ANCHOR_WIDTHS = [163.03, 73.11, 369.82, 617.81, 331.97]
-    RPN_ANCHOR_NUM = len(RPN_ANCHOR_HEIGHTS)
+
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
                      'dog': 2,
@@ -125,3 +130,7 @@ class MacVoConfig(VOCConfig):
 
 # 当前配置
 current_config = VOCConfig()
+
+if __name__ == '__main__':
+    print("batch_size:{}".format(current_config.BATCH_SIZE))
+    print("input_shape:{}".format(current_config.IMAGE_INPUT_SHAPE))
