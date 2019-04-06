@@ -27,11 +27,10 @@ def load_image(image_path):
     return image[..., :3]
 
 
-def load_image_gt(image_id, image_path, output_size, gt_boxes=None):
+def resize_image_and_gt(image, output_size, gt_boxes=None):
     """
-    加载图像，生成训练输入大小的图像，并调整GT 边框，返回相关元数据信息
-    :param image_id: 图像编号id
-    :param image_path: 图像路径
+    按照输入大小缩放图像
+    :param image:
     :param output_size: 标量，图像输出尺寸，及网络输入到高度或宽度(默认长宽相等)
     :param gt_boxes: GT 边框 [N,(y1,x1,y2,x2)]
     :return:
@@ -39,15 +38,13 @@ def load_image_gt(image_id, image_path, output_size, gt_boxes=None):
     image_meta: 元数据信息，详见compose_image_meta
     gt_boxes：图像缩放及padding后对于的GT 边框坐标 [N,(y1,x1,y2,x2)]
     """
-    # 加载图像
-    image = load_image(image_path)
     original_shape = image.shape
     # resize图像，并获取相关元数据信息
     h, w, window, scale, padding = resize_meta(original_shape[0], original_shape[1], output_size)
     image = resize_image(image, h, w, padding)
 
     # 组合元数据信息
-    image_meta = compose_image_meta(image_id, original_shape, image.shape,
+    image_meta = compose_image_meta(np.random.randint(10000), original_shape, image.shape,
                                     window, scale)
     # 根据缩放及padding调整GT边框
     if gt_boxes is not None and gt_boxes.shape[0] > 0:

@@ -15,7 +15,7 @@ import tensorflow as tf
 import keras
 from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
-from faster_rcnn.utils.generator import generator
+from faster_rcnn.utils.generator import Generator
 from faster_rcnn.layers import models
 from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
 
@@ -54,9 +54,19 @@ def main(args):
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
-    print("all_img_info:{}".format(len(train_img_info)))
+    print("train_img_info:{}".format(len(train_img_info)))
+    test_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'test']  # 测试集
+    print("test_img_info:{}".format(len(test_img_info)))
     # 生成器
-    gen = generator(train_img_info, config.BATCH_SIZE, config.IMAGE_MAX_DIM, config.MAX_GT_INSTANCES)
+    train_gen = Generator(train_img_info,
+                          config.IMAGE_INPUT_SHAPE,
+                          config.BATCH_SIZE,
+                          config.MAX_GT_INSTANCES)
+    # 生成器
+    val_gen = Generator(test_img_info,
+                        config.IMAGE_INPUT_SHAPE,
+                        config.BATCH_SIZE,
+                        config.MAX_GT_INSTANCES)
     #
     if 'rpn' in args.stages:
         m = models.rpn_net(config)
@@ -68,7 +78,7 @@ def main(args):
         metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
         models.add_metrics(m, metric_names, layer.output[-4:])
         m.summary()
-        m.fit_generator(gen,
+        m.fit_generator(train_gen.gen(),
                         epochs=args.epochs,
                         steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
                         verbose=1,
@@ -98,11 +108,13 @@ def main(args):
             m.load_weights(config.pretrained_weights, by_name=True)
         m.summary()
         # 训练
-        m.fit_generator(gen,
+        m.fit_generator(train_gen.gen(),
                         epochs=args.epochs,
                         steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
                         verbose=1,
                         initial_epoch=args.init_epochs,
+                        validation_data=val_gen.gen(),
+                        validation_steps=5,  # 小一点，不影响训练速度太多
                         use_multiprocessing=True,
                         callbacks=get_call_back('rcnn'))
 

@@ -5,47 +5,56 @@
    Author :       mick.yi
    date：          2019/3/4
 """
-import random
 import numpy as np
-from faster_rcnn.utils import np_utils, image as image_util
+from faster_rcnn.utils import np_utils, image as image_utils
 
 
-def generator(image_info_list, batch_size, max_output_dim, max_gt_num, stage='train'):
-    """
+class Generator(object):
+    def __init__(self, annotation_list, input_shape, batch_size, max_gt_num,
+                 horizontal_flip=False, random_crop=False,
+                 **kwargs):
+        """
 
-    :param image_info_list: 字典列表
-    :param batch_size:
-    :param max_output_dim:
-    :param max_gt_num:
-    :param stage:
-    :return:
-    """
-    image_length = len(image_info_list)
-    id_list = range(image_length)
-    while True:
-        ids = random.sample(id_list, batch_size)
-        batch_image = []
-        batch_image_meta = []
-        batch_class_ids = []
-        batch_bbox = []
+        :param annotation_list:
+        :param input_shape:
+        :param batch_size:
+        :param max_gt_num:
+        :param horizontal_flip:
+        :param random_crop:
+        :param kwargs:
+        """
+        self.input_shape = input_shape
+        self.annotation_list = annotation_list
+        self.batch_size = batch_size
+        self.max_gt_num = max_gt_num
+        self.horizontal_flip = horizontal_flip
+        self.random_crop = random_crop
+        self.size = len(annotation_list)
+        super(Generator, self).__init__(**kwargs)
 
-        for id in ids:
-            image, image_meta, bbox = image_util.load_image_gt(id,
-                                                               image_info_list[id]['filepath'],
-                                                               max_output_dim,
-                                                               image_info_list[id]['boxes'])
-            batch_image.append(image)
-            batch_image_meta.append(image_meta)
-            if stage == 'train':
-                # gt个数固定
-                batch_class_ids.append(
-                    np_utils.pad_to_fixed_size(np.expand_dims(image_info_list[id]['labels'], axis=1), max_gt_num))
-                batch_bbox.append(np_utils.pad_to_fixed_size(bbox, max_gt_num))
-        if stage == 'train':
-            yield [np.asarray(batch_image),
-                   np.asarray(batch_image_meta),
-                   np.asarray(batch_class_ids),
-                   np.asarray(batch_bbox)], None
-        else:
-            yield [np.asarray(batch_image),
-                   np.asarray(batch_image_meta)]
+    def gen(self):
+        while True:
+            images = np.zeros((self.batch_size,) + self.input_shape, dtype=np.float32)
+            image_metas = np.zeros((self.batch_size, 12), dtype=np.float32)
+            batch_gt_boxes = np.zeros((self.batch_size, self.max_gt_num, 5), dtype=np.float32)
+            batch_gt_class_ids = np.ones((self.batch_size, self.max_gt_num, 2), dtype=np.uint8)
+            # 随机选择
+            indices = np.random.choice(self.size, self.batch_size, replace=False)
+            for i, index in enumerate(indices):
+                # 加载图像
+                image = image_utils.load_image(self.annotation_list[i]['filepath'])
+
+                # resize图像
+                images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
+                                                                                      self.input_shape[0],
+                                                                                      self.annotation_list[id]['boxes'])
+                # pad gt到固定个数
+                batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
+                batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
+                    np.expand_dims(self.annotation_list[i]['labels'], axis=1),
+                    self.max_gt_num)
+
+            yield {"input_image": images,
+                   "input_image_meta": image_metas,
+                   "input_gt_boxes": batch_gt_boxes,
+                   "input_gt_class_ids": batch_gt_class_ids}, None

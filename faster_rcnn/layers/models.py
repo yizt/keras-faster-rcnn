@@ -74,10 +74,11 @@ def rpn_net(config, stage='train'):
 def frcnn(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
     # 输入
-    input_image = Input(shape=config.IMAGE_INPUT_SHAPE)
-    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1))
-    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1))
-    input_image_meta = Input(shape=(12,))
+    input_image = Input(shape=config.IMAGE_INPUT_SHAPE, name='input_image')
+    input_image_meta = Input(shape=(12,), name='input_image_meta')
+    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1), name='input_gt_class_ids')
+    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), name='input_gt_boxes')
+
     # 特征及预测结果
     features = resnet50(input_image)
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
@@ -237,6 +238,7 @@ def rpn(base_layers, num_anchors):
 
 
 def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
+    # RoiAlign
     x = RoiAlign(image_max_dim)([base_layers, rois])  #
     # 用卷积来实现两个全连接
     x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
