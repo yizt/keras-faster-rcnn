@@ -47,7 +47,7 @@ class Generator(object):
                 # resize图像
                 images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
                                                                                       self.input_shape[0],
-                                                                                      self.annotation_list[id]['boxes'])
+                                                                                      self.annotation_list[i]['boxes'])
                 # pad gt到固定个数
                 batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
                 batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
