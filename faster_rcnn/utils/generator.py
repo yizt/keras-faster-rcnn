@@ -42,16 +42,17 @@ class Generator(object):
             indices = np.random.choice(self.size, self.batch_size, replace=False)
             for i, index in enumerate(indices):
                 # 加载图像
-                image = image_utils.load_image(self.annotation_list[i]['filepath'])
+                image = image_utils.load_image(self.annotation_list[index]['filepath'])
 
                 # resize图像
                 images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
                                                                                       self.input_shape[0],
-                                                                                      self.annotation_list[i]['boxes'])
+                                                                                      self.annotation_list[index][
+                                                                                          'boxes'])
                 # pad gt到固定个数
                 batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
                 batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
-                    np.expand_dims(self.annotation_list[i]['labels'], axis=1),
+                    np.expand_dims(self.annotation_list[index]['labels'], axis=1),
                     self.max_gt_num)
 
             yield {"input_image": images,
