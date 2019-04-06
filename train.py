@@ -61,7 +61,9 @@ def main(args):
     train_gen = Generator(train_img_info,
                           config.IMAGE_INPUT_SHAPE,
                           config.BATCH_SIZE,
-                          config.MAX_GT_INSTANCES)
+                          config.MAX_GT_INSTANCES,
+                          horizontal_flip=config.USE_HORIZONTAL_FLIP,
+                          random_crop=config.USE_RANDOM_CROP)
     # 生成器
     val_gen = Generator(test_img_info,
                         config.IMAGE_INPUT_SHAPE,

@@ -69,6 +69,9 @@ class Config(object):
         "rcnn_class_loss": 1.,
         "rcnn_bbox_loss": 1.
     }
+    # 数据增广
+    USE_HORIZONTAL_FLIP = False
+    USE_RANDOM_CROP = False
 
     def __init__(self):
         self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT  # batch_size是GPU数乘每个gpu处理图片数
@@ -87,6 +90,9 @@ class VOCConfig(Config):
 
     RPN_ANCHOR_HEIGHTS = [258.15, 87.23, 226.65, 386.09, 491.17]
     RPN_ANCHOR_WIDTHS = [163.03, 73.11, 369.82, 617.81, 331.97]
+
+    USE_HORIZONTAL_FLIP = True
+    USE_RANDOM_CROP = True
 
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
