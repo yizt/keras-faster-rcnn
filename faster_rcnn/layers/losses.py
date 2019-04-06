@@ -6,6 +6,7 @@ Created on 2018/12/4 10:46
 损失函数层
 """
 import tensorflow as tf
+import keras.backend as K
 
 
 def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
@@ -37,6 +38,7 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     # 交叉熵损失函数
     losses = tf.nn.softmax_cross_entropy_with_logits_v2(
         labels=true_cls_ids, logits=predict_cls_ids)
+    losses = K.mean(losses)
     return losses
 
 
@@ -74,7 +76,6 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
     predict_deltas = tf.gather_nd(predict_deltas, train_indices_2d, name='rpn_regress_loss_predict_deltas')
 
     # Smooth-L1 # 非常重要，不然报NAN
-    import keras.backend as K
     loss = K.switch(tf.size(deltas) > 0,
                     smooth_l1_loss(deltas, predict_deltas),
                     tf.constant(0.0))
@@ -99,6 +100,7 @@ def detect_cls_loss(predict_cls_ids, true_cls_ids):
 
     # 交叉熵损失函数
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_cls_ids, logits=predict_cls_ids)
+    loss = K.mean(loss)
     return loss
 
 
@@ -120,7 +122,6 @@ def detect_regress_loss(predict_deltas, deltas, class_ids):
     predict_deltas = tf.gather_nd(predict_deltas, predict_indices)
 
     # Smooth-L1 # 非常重要，不然报NAN
-    import keras.backend as K
     loss = K.switch(tf.size(deltas) > 0,
                     smooth_l1_loss(deltas, predict_deltas),
                     tf.constant(0.0))
