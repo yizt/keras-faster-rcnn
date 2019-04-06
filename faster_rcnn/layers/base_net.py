@@ -44,6 +44,9 @@ def resnet50(input):
     x = identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
     x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
 
+    # 先压缩通道
+    x = layers.Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal',
+                        name='base_features')(x)
     # x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
