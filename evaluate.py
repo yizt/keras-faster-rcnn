@@ -26,7 +26,7 @@ def main(args):
     print("len:{}".format(len(dataset.get_image_info_list())))
     test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == 'test']
     print("len:{}".format(len(test_image_info_list)))
-    gen = Generator(dataset.get_image_info_list(),
+    gen = Generator(test_image_info_list,
                     config.IMAGE_INPUT_SHAPE)
     # 加载模型
     m = models.frcnn(config, stage='test')
