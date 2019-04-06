@@ -6,7 +6,44 @@
    date：          2019/3/4
 """
 import numpy as np
+import random
 from faster_rcnn.utils import np_utils, image as image_utils
+
+
+def image_flip(image, gt_boxes):
+    """
+    水平翻转图像和gt boxes
+    :param image: [H,W,3]
+    :param gt_boxes: [n,(y1,x1,y2,x2)]
+    :return:
+    """
+    # gt翻转
+    if gt_boxes is not None and gt_boxes.shape[0] > 0:
+        x_min = image.shape[1] - gt_boxes[:, 3]  # x坐标关于图像中心对称x+x'=w
+        x_max = image.shape[1] - gt_boxes[:, 1]
+        # 左右位置互换,新的顺序为[y1,x_min,y2,x_max]
+        gt_boxes = np.stack([gt_boxes[:, 0], x_min, gt_boxes[:, 2], x_max], axis=1)
+
+    return image[:, ::-1, :], gt_boxes
+
+
+def image_crop(image, gt_boxes):
+    """
+    随机裁剪图像和gt boxes
+    :param image: [H,W,3]
+    :param gt_boxes: [n,(y1,x1,y2,x2)]
+    :return:
+    """
+    # gt坐标偏移
+    if gt_boxes is not None and gt_boxes.shape[0] > 0:
+        # gt_boxes的窗口区域
+        min_x, max_x = np.min(gt_boxes[:, 1::2]), np.max(gt_boxes[:, 1::2])
+        min_y, max_y = np.min(gt_boxes[:, ::2]), np.max(gt_boxes[:, ::2])
+        image, crop_window = image_utils.random_crop_image(image, [min_y, min_x, max_y, max_x])
+        # print(image.shape,[min_y, min_x, max_y, max_x],crop_window)
+        gt_boxes[:, ::2] -= crop_window[0]  # 高度偏移
+        gt_boxes[:, 1::2] -= crop_window[1]  # 宽度偏移
+    return image, gt_boxes
 
 
 class Generator(object):
@@ -43,12 +80,17 @@ class Generator(object):
             for i, index in enumerate(indices):
                 # 加载图像
                 image = image_utils.load_image(self.annotation_list[index]['filepath'])
+                # 数据增广:水平翻转、随机裁剪
+                gt_boxes = self.annotation_list[index]['boxes']
+                if self.horizontal_flip and random.random() > 0.5:
+                    image, gt_boxes = image_flip(image, gt_boxes)
+                if self.random_crop and random.random() > 0.5:
+                    image, gt_boxes = image_crop(image, gt_boxes)
 
                 # resize图像
                 images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
                                                                                       self.input_shape[0],
-                                                                                      self.annotation_list[index][
-                                                                                          'boxes'])
+                                                                                      gt_boxes)
                 # pad gt到固定个数
                 batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
                 batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(

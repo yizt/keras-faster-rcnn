@@ -182,3 +182,20 @@ def recover_detect_boxes(boxes, window, scale):
     # 还原缩放
     boxes /= scale
     return boxes
+
+
+def random_crop_image(image, gt_window):
+    """
+    随机裁剪图像
+    :param image: [H,W,C]
+    :param gt_window: 标注区域 (y1,x1,y2,x2)
+    :return: 裁剪后的图像和裁剪窗口
+    """
+    h, w = list(image.shape)[:2]
+    y1, x1, y2, x2 = gt_window
+    # 每边最多裁剪1/5
+    wy1 = np.random.randint(min(y1 + 1, h // 5))
+    wx1 = np.random.randint(min(x1 + 1, w // 5))
+    wy2 = h - np.random.randint(min(h - y2 + 1, h // 5))
+    wx2 = w - np.random.randint(min(w - x2 + 1, w // 5))
+    return image[wy1:wy2, wx1:wx2], [wy1, wx1, wy2, wx2]
