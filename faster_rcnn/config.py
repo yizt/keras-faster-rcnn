@@ -118,14 +118,16 @@ class VOCConfig(Config):
 
 
 class LocalVOCConfig(VOCConfig):
+    GPU_COUNT = 1
     pretrained_weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
     weights = 'frcnn-rpn.010.h5'
     voc_path = r'd:\work\图像识别\VOCtrainval_06-Nov-2007\VOCdevkit'
 
 
 class MacVoConfig(VOCConfig):
+    GPU_COUNT = 1
     voc_path = '/Users/yizuotian/dataset/VOCdevkit/'
-    pretrained_weights = 'resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    pretrained_weights = '/Users/yizuotian/dataset/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 
 # 当前配置
