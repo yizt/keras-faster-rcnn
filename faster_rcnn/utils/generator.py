@@ -10,7 +10,7 @@ from faster_rcnn.utils import np_utils, image as image_utils
 
 
 class Generator(object):
-    def __init__(self, annotation_list, input_shape, batch_size, max_gt_num,
+    def __init__(self, annotation_list, input_shape, batch_size=1, max_gt_num=50,
                  horizontal_flip=False, random_crop=False,
                  **kwargs):
         """
@@ -58,3 +58,19 @@ class Generator(object):
                    "input_image_meta": image_metas,
                    "input_gt_boxes": batch_gt_boxes,
                    "input_gt_class_ids": batch_gt_class_ids}, None
+
+    def gen_val(self):
+        """
+        评估生成器
+        :return:
+        """
+        for idx, image_info in enumerate(self.annotation_list):
+            # 加载图像
+            image = image_utils.load_image(self.annotation_list[idx]['filepath'])
+            image, image_meta, _ = image_utils.resize_image_and_gt(image,
+                                                                   self.input_shape[0])
+
+            if idx % 200 == 0:
+                print("开始预测:{}张图像".format(idx))
+            yield {"input_image": np.asarray([image]),
+                   "input_image_meta": np.asarray([image_meta])}

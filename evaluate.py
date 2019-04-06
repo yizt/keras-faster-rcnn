@@ -13,24 +13,7 @@ from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.config import current_config as config
 from faster_rcnn.utils import np_utils, image as image_utils, eval_utils
 from faster_rcnn.layers import models
-
-
-def generator(image_info_list, max_output_dim):
-    """
-    评估生成器
-    :param image_info_list: 字典列表
-    :param max_output_dim:
-    :return:
-    """
-    for idx, image_info in enumerate(image_info_list):
-        image, image_meta, _ = image_utils.load_image_gt(np.random.randint(10),
-                                                         image_info['filepath'],
-                                                         max_output_dim,
-                                                         None)
-        if idx % 200 == 0:
-            print("开始预测:{}张图像".format(idx))
-        yield [np.asarray([image]),
-               np.asarray([image_meta])]
+from faster_rcnn.utils.generator import Generator
 
 
 def main(args):
@@ -43,6 +26,8 @@ def main(args):
     print("len:{}".format(len(dataset.get_image_info_list())))
     test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == 'test']
     print("len:{}".format(len(test_image_info_list)))
+    gen = Generator(dataset.get_image_info_list(),
+                    config.IMAGE_INPUT_SHAPE)
     # 加载模型
     m = models.frcnn(config, stage='test')
     if args.weight_path is not None:
@@ -53,8 +38,8 @@ def main(args):
     # 预测边框、得分、类别
     s_time = time.time()
     boxes, scores, class_ids, _, image_metas = m.predict_generator(
-        generator(test_image_info_list, config.IMAGE_MAX_DIM),
-        steps=len(test_image_info_list),
+        gen.gen_val(),
+        steps=gen.size,
         use_multiprocessing=True)
     print("预测 {} 张图像,耗时：{} 秒".format(len(test_image_info_list), time.time() - s_time))
     # 去除padding
