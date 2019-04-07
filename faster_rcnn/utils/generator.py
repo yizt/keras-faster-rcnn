@@ -19,7 +19,6 @@ def image_flip(image, gt_boxes):
     """
     # gt翻转
     if gt_boxes is not None and gt_boxes.shape[0] > 0:
-        gt_boxes = gt_boxes.copy()  # 不改变原来的
         x_min = image.shape[1] - gt_boxes[:, 3]  # x坐标关于图像中心对称x+x'=w
         x_max = image.shape[1] - gt_boxes[:, 1]
         # 左右位置互换,新的顺序为[y1,x_min,y2,x_max]
@@ -37,7 +36,6 @@ def image_crop(image, gt_boxes):
     """
     # gt坐标偏移
     if gt_boxes is not None and gt_boxes.shape[0] > 0:
-        gt_boxes = gt_boxes.copy()  # 不改变原来的
         # gt_boxes的窗口区域
         min_x, max_x = np.min(gt_boxes[:, 1::2]), np.max(gt_boxes[:, 1::2])
         min_y, max_y = np.min(gt_boxes[:, ::2]), np.max(gt_boxes[:, ::2])
@@ -83,7 +81,7 @@ class Generator(object):
                 # 加载图像
                 image = image_utils.load_image(self.annotation_list[index]['filepath'])
                 # 数据增广:水平翻转、随机裁剪
-                gt_boxes = self.annotation_list[index]['boxes']
+                gt_boxes = self.annotation_list[index]['boxes'].copy()  # 不改变原来的
                 if self.horizontal_flip and random.random() > 0.5:
                     image, gt_boxes = image_flip(image, gt_boxes)
                 if self.random_crop and random.random() > 0.5:
