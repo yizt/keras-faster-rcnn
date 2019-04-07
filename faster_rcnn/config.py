@@ -92,7 +92,7 @@ class VOCConfig(Config):
     RPN_ANCHOR_WIDTHS = [163.03, 73.11, 369.82, 617.81, 331.97]
 
     USE_HORIZONTAL_FLIP = True
-    USE_RANDOM_CROP = True
+    # USE_RANDOM_CROP = True
 
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
