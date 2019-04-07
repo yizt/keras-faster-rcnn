@@ -17,7 +17,7 @@ from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.generator import Generator
 from faster_rcnn.layers import models
-from keras.callbacks import TensorBoard, ReduceLROnPlateau, ModelCheckpoint
+from keras.callbacks import TensorBoard, ModelCheckpoint
 
 
 def set_gpu_growth(gpu_count):
@@ -37,26 +37,14 @@ def get_call_back(stage):
                                  monitor='acc',
                                  verbose=1,
                                  save_best_only=False,
+                                 save_weights_only=True,
                                  period=5)
 
-    # 验证误差没有提升
-    lr_reducer = ReduceLROnPlateau(monitor='loss',
-                                   factor=0.1,
-                                   cooldown=0,
-                                   patience=10,
-                                   min_lr=0)
     log = TensorBoard(log_dir='log')
-    return [checkpoint, lr_reducer, log]
+    return [checkpoint, log]
 
 
-def main(args):
-    set_gpu_growth(config.GPU_COUNT)
-    dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
-    dataset.prepare()
-    train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
-    print("train_img_info:{}".format(len(train_img_info)))
-    test_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'test']  # 测试集
-    print("test_img_info:{}".format(len(test_img_info)))
+def train(m, train_layers, epochs, init_epochs, train_img_info, test_img_info):
     # 生成器
     train_gen = Generator(train_img_info,
                           config.IMAGE_INPUT_SHAPE,
@@ -69,69 +57,62 @@ def main(args):
                         config.IMAGE_INPUT_SHAPE,
                         config.BATCH_SIZE,
                         config.MAX_GT_INSTANCES)
+    # 层名匹配
+    layer_regex = {
+        # 网络头
+        "heads": r"base_features|(rcnn\_.*)|(rpn\_.*)",
+        # 指定的阶段开始
+        "3+": r"base_features|(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+        "4+": r"base_features|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+        "5+": r"base_features|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+        # 所有层
+        "all": ".*",
+    }
+    models.set_trainable(layer_regex[train_layers])
+
+    loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
+    models.compile(m, config, loss_names)
+    # # 增加个性化度量
+    # layer = m.inner_model.get_layer('rpn_target')
+    # metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
+    # models.add_metrics(m, metric_names, layer.output[-4:])
     #
-    if 'rpn' in args.stages:
-        m = models.rpn_net(config)
-        m.load_weights(config.pretrained_weights, by_name=True)
-        loss_names = ["rpn_bbox_loss", "rpn_class_loss"]
-        models.compile(m, config, loss_names)
-        # 增加个性化度量
-        layer = m.get_layer('rpn_target')
-        metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
-        models.add_metrics(m, metric_names, layer.output[-4:])
-        m.summary()
-        m.fit_generator(train_gen.gen(),
-                        epochs=args.epochs,
-                        steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
-                        verbose=1,
-                        initial_epoch=args.init_epochs,
-                        use_multiprocessing=True,
-                        callbacks=get_call_back('rpn'))
+    # layer = m.inner_model.get_layer('rcnn_target')
+    # metric_names = ['rcnn_miss_match_gt_num']
+    # models.add_metrics(m, metric_names, layer.output[-1:])
 
-        m.save(config.rpn_weights)
-    if 'rcnn' in args.stages:
-        m = models.frcnn(config)
-        loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
-        models.compile(m, config, loss_names)
-        # # 增加个性化度量
-        # layer = m.inner_model.get_layer('rpn_target')
-        # metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
-        # models.add_metrics(m, metric_names, layer.output[-4:])
-        #
-        # layer = m.inner_model.get_layer('rcnn_target')
-        # metric_names = ['rcnn_miss_match_gt_num']
-        # models.add_metrics(m, metric_names, layer.output[-1:])
-        # 加载预训练模型
-        if args.init_epochs > 0:
-            m.load_weights(args.init_weight_path, by_name=True)
-        elif os.path.exists(config.rpn_weights):  # 有rpn预训练模型就加载，没有直接加载resnet50预训练模型
-            m.load_weights(config.rpn_weights, by_name=True)
-        else:
-            m.load_weights(config.pretrained_weights, by_name=True)
-        m.summary()
-        # 训练
-        m.fit_generator(train_gen.gen(),
-                        epochs=args.epochs,
-                        steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
-                        verbose=1,
-                        initial_epoch=args.init_epochs,
-                        validation_data=val_gen.gen(),
-                        validation_steps=5,  # 小一点，不影响训练速度太多
-                        use_multiprocessing=True,
-                        callbacks=get_call_back('rcnn'))
+    # 训练
+    m.fit_generator(train_gen.gen(),
+                    epochs=epochs,
+                    steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
+                    verbose=1,
+                    initial_epoch=init_epochs,
+                    validation_data=val_gen.gen(),
+                    validation_steps=20,  # 小一点，不影响训练速度太多
+                    use_multiprocessing=True,
+                    callbacks=get_call_back('rcnn'))
 
-        if args.weight_path is not None:
-            m.save(args.weight_path)
-        else:
-            m.save(config.rcnn_weights)
+
+def main(args):
+    set_gpu_growth(config.GPU_COUNT)
+    dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
+    dataset.prepare()
+    train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
+    print("train_img_info:{}".format(len(train_img_info)))
+    test_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'test']  # 测试集
+    print("test_img_info:{}".format(len(test_img_info)))
+    m = models.frcnn(config, stage='train')
+    # 加载预训练模型
+    m.load_weights(config.pretrained_weights, by_name=True)
+    m.summary()
+    #
+    train(m, 'heads', 20, 0, train_img_info, test_img_info)
+    train(m, '3+', 60, 20, train_img_info, test_img_info)
+    train(m, 'all', 80, 60, train_img_info, test_img_info)
 
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument("--stages", type=str, nargs='+', default=['rcnn'], help="stages: rpn、rcnn")
     parse.add_argument("--epochs", type=int, default=50, help="epochs")
-    parse.add_argument("--weight_path", type=str, default=None, help="weight path")
-    parse.add_argument("--init_weight_path", type=str, default=None, help="weight path")
-    parse.add_argument("--init_epochs", type=int, default=0, help="weight path")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)

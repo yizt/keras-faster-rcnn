@@ -25,12 +25,12 @@ def resnet50(input):
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
     # # 确定精调层
-    no_train_model = Model(inputs=input, outputs=x)
-    for l in no_train_model.layers:
-        if isinstance(l, layers.BatchNormalization):
-            l.trainable = True
-        else:
-            l.trainable = False
+    # no_train_model = Model(inputs=input, outputs=x)
+    # for l in no_train_model.layers:
+    #     if isinstance(l, layers.BatchNormalization):
+    #         l.trainable = True
+    #     else:
+    #         l.trainable = False
 
     x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
@@ -45,8 +45,8 @@ def resnet50(input):
     x = identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
 
     # 先压缩通道
-    x = layers.Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal',
-                        name='base_features')(x)
+    x = layers.Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='he_normal',
+                      name='base_features')(x)
     # x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
     # x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')

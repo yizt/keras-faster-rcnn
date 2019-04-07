@@ -8,6 +8,7 @@ frcnn模型
 
 """
 import keras
+import re
 from keras import layers, backend
 from keras.models import Model
 from keras.layers import Input, Lambda, Conv2D, Reshape, TimeDistributed
@@ -22,6 +23,7 @@ from faster_rcnn.layers.detect_boxes import ProposalToDetectBox
 from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 from faster_rcnn.utils.parallel_model import ParallelModel
+from faster_rcnn.utils.utils import log
 
 
 def rpn_net(config, stage='train'):
@@ -268,6 +270,42 @@ def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_lay
     deltas = layers.Reshape((roi_num, num_classes, 4))(deltas)
 
     return deltas, class_logits
+
+
+def set_trainable(layer_regex, keras_model, indent=0, verbose=1):
+    """Sets model layers as trainable if their names match
+    the given regular expression.
+    """
+    # Print message on the first call (but not on recursive calls)
+    if verbose > 0 and keras_model is None:
+        log("Selecting layers to train")
+
+    # In multi-GPU training, we wrap the model. Get layers
+    # of the inner model because they have the weights.
+    layers = keras_model.inner_model.layers if hasattr(keras_model, "inner_model") \
+        else keras_model.layers
+
+    for layer in layers:
+        # Is the layer a model?
+        if layer.__class__.__name__ == 'Model':
+            print("In model: ", layer.name)
+            set_trainable(
+                layer_regex, keras_model=layer, indent=indent + 4)
+            continue
+
+        if not layer.weights:
+            continue
+        # Is it trainable?
+        trainable = bool(re.fullmatch(layer_regex, layer.name))
+        # Update layer. If layer is a container, update inner layer.
+        if layer.__class__.__name__ == 'TimeDistributed':
+            layer.layer.trainable = trainable
+        else:
+            layer.trainable = trainable
+        # Print trainable layer names
+        if trainable and verbose > 0:
+            log("{}{:20}   ({})".format(" " * indent, layer.name,
+                                        layer.__class__.__name__))
 
 
 def resnet_test_net(input):
