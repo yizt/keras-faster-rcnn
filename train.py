@@ -68,7 +68,7 @@ def train(m, train_layers, epochs, init_epochs, train_img_info, test_img_info):
         # 所有层
         "all": ".*",
     }
-    models.set_trainable(layer_regex[train_layers])
+    models.set_trainable(layer_regex[train_layers], m)
 
     loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
     models.compile(m, config, loss_names)
