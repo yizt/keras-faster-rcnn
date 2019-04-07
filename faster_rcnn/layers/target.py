@@ -108,7 +108,12 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, rpn_train_anchors=None):
     # 正样本索引号（iou>0.7),
     positive_anchor_indices_2 = tf.where(anchors_iou_max > 0.7, name='rpn_target_positive_indices')  # [:, 0]
     # 找到正样本对应的GT boxes 索引
-    anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
+    # anchors_iou_argmax = tf.argmax(iou, axis=0)  # 每个anchor最大iou对应的GT 索引 [n]
+    anchors_iou_argmax = tf.cond(  # 需要考虑GT个数为0的情况
+        tf.greater(tf.shape(gt_boxes)[0], 0),
+        true_fn=lambda: tf.argmax(iou, axis=0),
+        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
+    )
     positive_gt_indices_2 = tf.gather_nd(anchors_iou_argmax, positive_anchor_indices_2)
 
     # 合并两部分正样本
@@ -242,7 +247,12 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     iou = compute_iou(gt_boxes, proposals)
 
     # 每个GT边框IoU最大的proposal为正
-    gt_iou_argmax = tf.argmax(iou, axis=1)
+    # gt_iou_argmax = tf.argmax(iou, axis=1)
+    gt_iou_argmax = tf.cond(  # 需要考虑proposal个数为0的情况
+        tf.greater(tf.shape(proposals)[0], 0),
+        true_fn=lambda: tf.argmax(iou, axis=1),
+        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
+    )
 
     # GT和对应的proposal
     # gt_boxes_pos_1 = tf.identity(gt_boxes)
@@ -261,7 +271,12 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     proposal_iou_max = tf.reduce_max(iou, axis=0)
     proposal_pos_idx = tf.where(proposal_iou_max >= 0.5)  # 正样本proposal对应的索引号,二维
 
-    proposal_iou_argmax = tf.argmax(iou, axis=0)
+    # proposal_iou_argmax = tf.argmax(iou, axis=0)
+    proposal_iou_argmax = tf.cond(  # 需要考虑GT个数为0的情况
+        tf.greater(tf.shape(gt_boxes)[0], 0),
+        true_fn=lambda: tf.argmax(iou, axis=0),
+        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
+    )
     gt_pos_idx = tf.gather_nd(proposal_iou_argmax, proposal_pos_idx)  # 对应的GT 索引号，一维的
 
     gt_boxes_pos_2 = tf.gather(gt_boxes, gt_pos_idx)
