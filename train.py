@@ -110,9 +110,12 @@ def main(args):
         m.load_weights(config.pretrained_weights, by_name=True)
     m.summary()
     #
-    train(m, 'heads', 20, init_epochs, train_img_info, test_img_info)
-    train(m, '3+', 60, init_epochs, train_img_info, test_img_info)
-    train(m, 'all', 80, init_epochs, train_img_info, test_img_info)
+    if init_epochs < 20:
+        train(m, 'heads', 20, init_epochs, train_img_info, test_img_info)
+    if init_epochs < 60:
+        train(m, '3+', 60, init_epochs, train_img_info, test_img_info)
+    if init_epochs < 80:
+        train(m, 'all', 80, init_epochs, train_img_info, test_img_info)
 
 
 if __name__ == '__main__':
