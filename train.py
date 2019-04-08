@@ -62,9 +62,9 @@ def train(m, train_layers, epochs, init_epochs, train_img_info, test_img_info):
         # 网络头
         "heads": r"base_features|(rcnn\_.*)|(rpn\_.*)",
         # 指定的阶段开始
-        "3+": r"base_features|(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
-        "4+": r"base_features|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
-        "5+": r"base_features|(res5.*)|(bn5.*)|(mrcnn\_.*)|(rpn\_.*)|(fpn\_.*)",
+        "3+": r"base_features|(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)",
+        "4+": r"base_features|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)",
+        "5+": r"base_features|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)|",
         # 所有层
         "all": ".*",
     }
@@ -103,16 +103,20 @@ def main(args):
     print("test_img_info:{}".format(len(test_img_info)))
     m = models.frcnn(config, stage='train')
     # 加载预训练模型
-    m.load_weights(config.pretrained_weights, by_name=True)
+    init_epochs = args.init_epochs
+    if args.init_epochs > 0:
+        m.load_weights('/tmp/frcnn-rcnn.{:03d}.h5'.format(init_epochs), by_name=True)
+    else:
+        m.load_weights(config.pretrained_weights, by_name=True)
     m.summary()
     #
-    train(m, 'heads', 20, 0, train_img_info, test_img_info)
-    train(m, '3+', 60, 20, train_img_info, test_img_info)
-    train(m, 'all', 80, 60, train_img_info, test_img_info)
+    train(m, 'heads', 20, init_epochs, train_img_info, test_img_info)
+    train(m, '3+', 60, init_epochs, train_img_info, test_img_info)
+    train(m, 'all', 80, init_epochs, train_img_info, test_img_info)
 
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument("--epochs", type=int, default=50, help="epochs")
+    parse.add_argument("--init_epochs", type=int, default=0, help="init_epochs")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)
