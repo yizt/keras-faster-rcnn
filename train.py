@@ -17,6 +17,7 @@ from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.generator import Generator
 from faster_rcnn.layers import models
+from faster_rcnn.utils import model_utils
 from keras.callbacks import TensorBoard, ModelCheckpoint
 
 
@@ -44,7 +45,7 @@ def get_call_back(stage):
     return [checkpoint, log]
 
 
-def train(m, train_layers, epochs, init_epochs, train_img_info, test_img_info):
+def train(m, train_layers, epochs, init_epochs, learning_rate, train_img_info, test_img_info):
     # 生成器
     train_gen = Generator(train_img_info,
                           config.IMAGE_INPUT_SHAPE,
@@ -71,7 +72,8 @@ def train(m, train_layers, epochs, init_epochs, train_img_info, test_img_info):
     models.set_trainable(layer_regex[train_layers], m)
 
     loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
-    models.compile(m, config, loss_names)
+    model_utils.compile(m, learning_rate, config.LEARNING_MOMENTUM,
+                        config.GRADIENT_CLIP_NORM, config.WEIGHT_DECAY, loss_names, config.LOSS_WEIGHTS)
     # # 增加个性化度量
     # layer = m.inner_model.get_layer('rpn_target')
     # metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
@@ -110,12 +112,12 @@ def main(args):
         m.load_weights(config.pretrained_weights, by_name=True)
     m.summary()
     #
-    if init_epochs < 20:
-        train(m, 'heads', 20, init_epochs, train_img_info, test_img_info)
-    if init_epochs < 60:
-        train(m, '3+', 60, init_epochs, train_img_info, test_img_info)
-    if init_epochs < 80:
-        train(m, 'all', 80, init_epochs, train_img_info, test_img_info)
+    if init_epochs < 40:
+        train(m, 'heads', 40, init_epochs, config.LEARNING_RATE, train_img_info, test_img_info)
+    if init_epochs < 120:
+        train(m, '3+', 120, max(init_epochs, 40), config.LEARNING_RATE, train_img_info, test_img_info)
+    if init_epochs < 160:
+        train(m, 'all', 160, max(init_epochs, 120), config.LEARNING_RATE, train_img_info, test_img_info)
 
 
 if __name__ == '__main__':
