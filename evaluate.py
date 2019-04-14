@@ -7,6 +7,7 @@
 """
 import argparse
 import sys
+import os
 import time
 import numpy as np
 from faster_rcnn.preprocess.input import VocDataset
@@ -17,6 +18,7 @@ from faster_rcnn.utils.generator import Generator
 
 
 def main(args):
+    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
     # 覆盖参数
     config.IMAGES_PER_GPU = 1
     config.GPU_COUNT = 1
@@ -24,7 +26,7 @@ def main(args):
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     print("len:{}".format(len(dataset.get_image_info_list())))
-    test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == 'test']
+    test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == args.data_set]
     print("len:{}".format(len(test_image_info_list)))
     gen = Generator(test_image_info_list,
                     config.IMAGE_INPUT_SHAPE)
@@ -64,5 +66,6 @@ def main(args):
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
     parse.add_argument("--weight_path", type=str, default=None, help="weight path")
+    parse.add_argument("--data_set", type=str, default='test', help="dataset to evaluate")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)
