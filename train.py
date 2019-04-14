@@ -117,7 +117,7 @@ def main(args):
     if init_epochs < 120:
         train(m, '3+', 120, max(init_epochs, 40), config.LEARNING_RATE, train_img_info, test_img_info)
     if init_epochs < 160:
-        train(m, 'all', 160, max(init_epochs, 120), config.LEARNING_RATE, train_img_info, test_img_info)
+        train(m, 'all', 160, max(init_epochs, 120), config.LEARNING_RATE / 10, train_img_info, test_img_info)
 
 
 if __name__ == '__main__':
