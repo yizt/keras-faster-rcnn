@@ -193,9 +193,9 @@ def random_crop_image(image, gt_window):
     """
     h, w = list(image.shape)[:2]
     y1, x1, y2, x2 = gt_window
-    # 每边最多裁剪1/5
-    wy1 = np.random.randint(min(y1 + 1, h // 5))
-    wx1 = np.random.randint(min(x1 + 1, w // 5))
-    wy2 = h - np.random.randint(min(h - y2 + 1, h // 5))
-    wx2 = w - np.random.randint(min(w - x2 + 1, w // 5))
+    # 每边最多裁剪1/20
+    wy1 = np.random.randint(min(y1 + 1, h // 20))
+    wx1 = np.random.randint(min(x1 + 1, w // 20))
+    wy2 = h - np.random.randint(min(h - y2 + 1, h // 20))
+    wx2 = w - np.random.randint(min(w - x2 + 1, w // 20))
     return image[wy1:wy2, wx1:wx2], [wy1, wx1, wy2, wx2]
