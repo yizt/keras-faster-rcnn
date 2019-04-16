@@ -71,36 +71,39 @@ class Generator(object):
 
     def gen(self):
         while True:
-            images = np.zeros((self.batch_size,) + self.input_shape, dtype=np.float32)
-            image_metas = np.zeros((self.batch_size, 12), dtype=np.float32)
-            batch_gt_boxes = np.zeros((self.batch_size, self.max_gt_num, 5), dtype=np.float32)
-            batch_gt_class_ids = np.ones((self.batch_size, self.max_gt_num, 2), dtype=np.uint8)
-            # 随机选择
-            indices = np.random.choice(self.size, self.batch_size, replace=False)
-            for i, index in enumerate(indices):
-                # 加载图像
-                image = image_utils.load_image(self.annotation_list[index]['filepath'])
-                # 数据增广:水平翻转、随机裁剪
-                gt_boxes = self.annotation_list[index]['boxes'].copy()  # 不改变原来的
-                if self.horizontal_flip and random.random() > 0.5:
-                    image, gt_boxes = image_flip(image, gt_boxes)
-                if self.random_crop and random.random() > 0.5:
-                    image, gt_boxes = image_crop(image, gt_boxes)
+            # 一个epoch重新打乱
+            np.random.shuffle(self.annotation_list)
+            for n in range(self.size // self.batch_size):
+                images = np.zeros((self.batch_size,) + self.input_shape, dtype=np.float32)
+                image_metas = np.zeros((self.batch_size, 12), dtype=np.float32)
+                batch_gt_boxes = np.zeros((self.batch_size, self.max_gt_num, 5), dtype=np.float32)
+                batch_gt_class_ids = np.ones((self.batch_size, self.max_gt_num, 2), dtype=np.uint8)
+                # 随机选择
+                indices = np.random.choice(self.size, self.batch_size, replace=False)
+                for i, index in enumerate(indices):
+                    # 加载图像
+                    image = image_utils.load_image(self.annotation_list[index]['filepath'])
+                    # 数据增广:水平翻转、随机裁剪
+                    gt_boxes = self.annotation_list[index]['boxes'].copy()  # 不改变原来的
+                    if self.horizontal_flip and random.random() > 0.5:
+                        image, gt_boxes = image_flip(image, gt_boxes)
+                    if self.random_crop and random.random() > 0.5:
+                        image, gt_boxes = image_crop(image, gt_boxes)
 
-                # resize图像
-                images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
-                                                                                      self.input_shape[0],
-                                                                                      gt_boxes)
-                # pad gt到固定个数
-                batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
-                batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
-                    np.expand_dims(self.annotation_list[index]['labels'], axis=1),
-                    self.max_gt_num)
+                    # resize图像
+                    images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
+                                                                                          self.input_shape[0],
+                                                                                          gt_boxes)
+                    # pad gt到固定个数
+                    batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
+                    batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
+                        np.expand_dims(self.annotation_list[index]['labels'], axis=1),
+                        self.max_gt_num)
 
-            yield {"input_image": images,
-                   "input_image_meta": image_metas,
-                   "input_gt_boxes": batch_gt_boxes,
-                   "input_gt_class_ids": batch_gt_class_ids}, None
+                yield {"input_image": images,
+                       "input_image_meta": image_metas,
+                       "input_gt_boxes": batch_gt_boxes,
+                       "input_gt_class_ids": batch_gt_class_ids}, None
 
     def gen_val(self):
         """
