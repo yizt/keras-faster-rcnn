@@ -51,7 +51,7 @@ def gt_boxes_cluster(gt_boxes, centers=5):
 
     # Kmeans聚类
     metric = distance_metric(type_metric.USER_DEFINED, func=iou_distance)
-    init_centers = hw[np.random.choice(hw.size, centers, replace=False)]
+    init_centers = hw[np.random.choice(len(hw), centers, replace=False)]
     m = kmeans(hw, init_centers, metric=metric)
     m.process()
     cluster_centers = np.array(m.get_centers())
