@@ -8,10 +8,31 @@ GT 工具类
 
 """
 import numpy as np
-from sklearn.cluster import KMeans
+from pyclustering.cluster.kmeans import kmeans
+from pyclustering.utils.metric import type_metric, distance_metric
 from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils import image as image_utils
+
+
+def iou_distance(box_a, box_b):
+    """
+    iou距离
+    :param box_a: [h,w]
+    :param box_b: [h,w]
+    :return:
+    """
+    if len(np.shape(box_a)) == 1:
+        ha, wa = box_a[0], box_a[1]
+        hb, wb = box_b[0], box_b[1]
+        overlap = min(ha, hb) * min(wa, wb)
+        iou = overlap / (ha * wa + hb * wb - overlap)
+    else:
+        ha, wa = box_a[:, 0], box_a[:, 1]
+        hb, wb = box_b[:, 0], box_b[:, 1]
+        overlap = np.minimum(ha, hb) * np.minimum(wa, wb)
+        iou = overlap / (ha * wa + hb * wb - overlap)
+    return 1. - iou
 
 
 def gt_boxes_cluster(gt_boxes, centers=5):
@@ -22,18 +43,28 @@ def gt_boxes_cluster(gt_boxes, centers=5):
     :return: 聚类后的高度和宽度
     """
 
-    # Kmeans聚类
     height = gt_boxes[:, 2] - gt_boxes[:, 0]
     width = gt_boxes[:, 3] - gt_boxes[:, 1]
     hw = np.stack([height, width], axis=1)
-
     # 保存长宽数据
     np.save('/tmp/gt_height_width.npy', hw)
+
+    # Kmeans聚类
+    metric = distance_metric(type_metric.USER_DEFINED, func=iou_distance)
+    init_centers = hw[np.random.choice(hw.size, centers, replace=False)]
+    m = kmeans(hw, init_centers, metric=metric)
+    m.process()
+    cluster_centers = np.array(m.get_centers())
+
     # 聚类
-    m = KMeans(n_clusters=centers).fit(hw)
-    height = [round(h, 2) for h in m.cluster_centers_[:, 0]]
-    width = [round(w, 2) for w in m.cluster_centers_[:, 1]]
-    return height, width
+    height = np.array([round(h, 2) for h in cluster_centers[:, 0]])
+    width = np.array([round(w, 2) for w in cluster_centers[:, 1]])
+    # 排序输出结果
+    sort_indices = np.argsort(height)
+    height = height[sort_indices]
+    width = width[sort_indices]
+
+    return list(height), list(width)
 
 
 def main():
