@@ -34,8 +34,8 @@ class Config(object):
     POST_NMS_ROIS_INFERENCE = 1000
 
     # 检测网络训练rois数和正样本比
-    TRAIN_ROIS_PER_IMAGE = 200
-    ROI_POSITIVE_RATIO = 0.33
+    TRAIN_ROIS_PER_IMAGE = 128
+    ROI_POSITIVE_RATIO = 0.25
 
     # Image mean (RGB)
     MEAN_PIXEL = np.array([123.7, 116.8, 103.9])
