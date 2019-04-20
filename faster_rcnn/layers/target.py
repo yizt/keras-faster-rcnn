@@ -300,8 +300,8 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     # 计算回归目标
     deltas = regress_target(proposal_pos, gt_boxes_pos)
 
-    # 负样本：与所有GT的iou<0.5
-    proposal_neg_idx = tf.where(proposal_iou_max < 0.5)
+    # 负样本：与所有GT的iou<0.5且iou>0.1
+    proposal_neg_idx = tf.where(tf.logical_and(proposal_iou_max < 0.5, proposal_iou_max > 0.1))
     # 确定负样本数量
     negative_num = tf.minimum(train_rois_per_image - positive_num, tf.shape(proposal_neg_idx)[0])
     proposal_neg_idx = tf.random_shuffle(proposal_neg_idx)[:negative_num]
