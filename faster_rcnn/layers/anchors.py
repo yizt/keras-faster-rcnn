@@ -125,7 +125,7 @@ class Anchor(keras.layers.Layer):
         total = np.prod(input_shape[1:3]) * self.num_anchors
         # total = 49 * self.num_anchors
         return [(input_shape[0], total, 4),
-                (input_shape, total)]
+                (input_shape[0], total)]
 
 
 if __name__ == '__main__':
