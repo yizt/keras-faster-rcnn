@@ -68,7 +68,7 @@ def rpn_net(config, stage='train'):
                                                       output_box_num=config.POST_NMS_ROIS_INFERENCE,
                                                       iou_threshold=config.RPN_NMS_THRESHOLD,
                                                       name='rpn2proposals')(
-            [boxes_regress, class_logits, anchors])
+            [boxes_regress, class_logits, anchors, anchors_tag])
         return Model(inputs=[input_image, input_image_meta],
                      outputs=[detect_boxes, class_scores])
 
@@ -101,7 +101,7 @@ def frcnn(config, stage='train'):
     output_box_num = config.POST_NMS_ROIS_TRAINING if stage == 'train' else config.POST_NMS_ROIS_INFERENCE
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=output_box_num,
                                          iou_threshold=config.RPN_NMS_THRESHOLD,
-                                         name='rpn2proposals')([boxes_regress, class_logits, anchors])
+                                         name='rpn2proposals')([boxes_regress, class_logits, anchors, anchors_tag])
     # proposal裁剪到图像窗口内
     proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
     # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)

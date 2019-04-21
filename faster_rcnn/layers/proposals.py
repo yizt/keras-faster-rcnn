@@ -10,13 +10,18 @@ import tensorflow as tf
 from faster_rcnn.utils import tf_utils
 
 
-def apply_regress(deltas, anchors):
+def apply_regress(deltas, anchors, anchors_tag):
     """
     应用回归目标到边框
     :param deltas: 回归目标[N,(dy, dx, dh, dw)]
     :param anchors: anchor boxes[N,(y1,x1,y2,x2)]
+    :param anchors_tag: anchor tag[N]
     :return:
     """
+    # 获取有效的anchors和对应的deltas
+    valid_anchor_indices = tf.where(anchors_tag)[:, 0]  # [valid_anchors_num]
+    anchors = tf.gather(anchors, valid_anchor_indices)
+    deltas = tf.gather(deltas, valid_anchor_indices)
     # 高度和宽度
     h = anchors[:, 2] - anchors[:, 0]
     w = anchors[:, 3] - anchors[:, 1]
@@ -92,12 +97,16 @@ class RpnToProposal(keras.layers.Layer):
         inputs[0]: deltas, [batch_size,N,(dy,dx,dh,dw)]   N是所有的anchors数量
         inputs[1]: class logits [batch_size,N,num_classes]
         inputs[2]: anchors [batch_size,N,(y1,x1,y2,x2)]
+        inputs[3]: Anchors是否有效 bool类型 [batch_size, N]
         :param kwargs:
         :return:
         """
         deltas = inputs[0]
         class_logits = inputs[1]
         anchors = inputs[2]
+        anchors_tag = inputs[3]
+        # 有效的anchors
+
         # 转为分类评分
         class_scores = tf.nn.softmax(logits=class_logits, axis=-1)  # [N,num_classes]
         fg_scores = tf.reduce_max(class_scores[..., 1:], axis=-1)  # 第一类为背景 (N,)
@@ -116,7 +125,9 @@ class RpnToProposal(keras.layers.Layer):
         #                     elems=[proposals, fg_scores, class_logits],
         #                     dtype=[tf.float32] * 3)
         # # 非极大抑制
-        proposals = tf_utils.batch_slice([deltas, anchors], lambda x, y: apply_regress(x, y), self.batch_size)
+        proposals = tf_utils.batch_slice([deltas, anchors, anchors_tag],
+                                         lambda x, y, z: apply_regress(x, y, z),
+                                         self.batch_size)
 
         outputs = tf_utils.batch_slice([proposals, fg_scores, class_logits],
                                        lambda x, y, z: nms(x, y, z,
