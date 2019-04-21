@@ -38,21 +38,21 @@ def rpn_net(config, stage='train'):
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(config.RPN_ANCHOR_HEIGHTS,
-                     config.RPN_ANCHOR_WIDTHS,
-                     config.RPN_ANCHOR_BASE_SIZE,
-                     config.RPN_ANCHOR_RATIOS,
-                     config.RPN_ANCHOR_SCALES,
-                     config.BACKBONE_STRIDE, name='gen_anchors')(features)
+    anchors, anchors_tag = Anchor(config.RPN_ANCHOR_HEIGHTS,
+                                  config.RPN_ANCHOR_WIDTHS,
+                                  config.RPN_ANCHOR_BASE_SIZE,
+                                  config.RPN_ANCHOR_RATIOS,
+                                  config.RPN_ANCHOR_SCALES,
+                                  config.BACKBONE_STRIDE, name='gen_anchors')(features)
     # 裁剪到窗口内
-    anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
+    # anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
     # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
     # anchors = ClipBoxes()([anchors, windows])
 
     if stage == 'train':
         # 生成分类和回归目标
         rpn_targets = RpnTarget(batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, name='rpn_target')(
-            [input_boxes, input_class_ids, anchors])  # [deltas,cls_ids,indices,..]
+            [input_boxes, input_class_ids, anchors, anchors_tag])  # [deltas,cls_ids,indices,..]
         deltas, cls_ids, anchor_indices = rpn_targets[:3]
         # 定义损失layer
         cls_loss = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(
@@ -86,14 +86,14 @@ def frcnn(config, stage='train'):
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
-    anchors = Anchor(config.RPN_ANCHOR_HEIGHTS,
-                     config.RPN_ANCHOR_WIDTHS,
-                     config.RPN_ANCHOR_BASE_SIZE,
-                     config.RPN_ANCHOR_RATIOS,
-                     config.RPN_ANCHOR_SCALES,
-                     config.BACKBONE_STRIDE, name='gen_anchors')(features)
+    anchors, anchors_tag = Anchor(config.RPN_ANCHOR_HEIGHTS,
+                                  config.RPN_ANCHOR_WIDTHS,
+                                  config.RPN_ANCHOR_BASE_SIZE,
+                                  config.RPN_ANCHOR_RATIOS,
+                                  config.RPN_ANCHOR_SCALES,
+                                  config.BACKBONE_STRIDE, name='gen_anchors')(features)
     # 裁剪到输入形状内
-    anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
+    # anchors = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE, name='clip_anchors')(anchors)
     windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
     # anchors = ClipBoxes()([anchors, windows])
 
@@ -112,7 +112,7 @@ def frcnn(config, stage='train'):
     if stage == 'train':
         # 生成分类和回归目标
         rpn_targets = RpnTarget(batch_size, config.RPN_TRAIN_ANCHORS_PER_IMAGE, name='rpn_target')(
-            [gt_boxes, gt_class_ids, anchors])  # [deltas,cls_ids,indices,..]
+            [gt_boxes, gt_class_ids, anchors, anchors_tag])  # [deltas,cls_ids,indices,..]
         rpn_deltas, rpn_cls_ids, anchor_indices = rpn_targets[:3]
         # 定义rpn损失layer
         cls_loss_rpn = Lambda(lambda x: rpn_cls_loss(*x), name='rpn_class_loss')(

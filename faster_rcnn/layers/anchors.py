@@ -65,8 +65,14 @@ def shift(shape, strides, base_anchors):
 
     # (H*W,anchor_num,4)
     anchors = shifts + base_anchors
-    # 转为(H*W*anchor_num,4) 返回
-    return tf.reshape(anchors, [-1, 4])
+    # 转为(H*W*anchor_num,4)
+    anchors = tf.reshape(anchors, [-1, 4])
+    # 丢弃越界的anchors
+    is_valid_anchors = tf.logical_and(tf.less_equal(anchors[:, 2], strides * H),  # 步长*feature map的高度就是图像高度
+                                      tf.logical_and(tf.less_equal(anchors[:, 3], strides * W),
+                                                     tf.logical_and(tf.greater_equal(anchors[:, 0], 0),
+                                                                    tf.greater_equal(anchors[:, 1], 0))))
+    return tf.reshape(anchors, [-1, 4]), is_valid_anchors
 
 
 class Anchor(keras.layers.Layer):
@@ -103,11 +109,11 @@ class Anchor(keras.layers.Layer):
         print("feature_shape:{}".format(features_shape))
 
         base_anchors = generate_anchors(self.heights, self.widths, self.base_size, self.ratios, self.scales)
-        anchors = shift(features_shape[1:3], self.strides, base_anchors)
+        anchors, anchors_tag = shift(features_shape[1:3], self.strides, base_anchors)
         # 扩展第一维，batch_size;每个样本都有相同的anchors
         anchors = tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
-
-        return anchors
+        anchors_tag = tf.tile(tf.expand_dims(anchors_tag, axis=0), [features_shape[0], 1, 1])
+        return anchors, anchors_tag
 
     def compute_output_shape(self, input_shape):
         """
@@ -118,8 +124,8 @@ class Anchor(keras.layers.Layer):
         # 计算所有的anchors数量
         total = np.prod(input_shape[1:3]) * self.num_anchors
         # total = 49 * self.num_anchors
-        return (input_shape[0],
-                total, 4)
+        return [(input_shape[0], total, 4),
+                (input_shape, total)]
 
 
 if __name__ == '__main__':
