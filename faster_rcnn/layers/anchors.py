@@ -113,7 +113,7 @@ class Anchor(keras.layers.Layer):
         # 扩展第一维，batch_size;每个样本都有相同的anchors
         anchors = tf.tile(tf.expand_dims(anchors, axis=0), [features_shape[0], 1, 1])
         anchors_tag = tf.tile(tf.expand_dims(anchors_tag, axis=0), [features_shape[0], 1])
-        return anchors, anchors_tag
+        return [anchors, anchors_tag]
 
     def compute_output_shape(self, input_shape):
         """
