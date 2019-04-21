@@ -67,9 +67,9 @@ def shift(shape, strides, base_anchors):
     anchors = shifts + base_anchors
     # 转为(H*W*anchor_num,4)
     anchors = tf.reshape(anchors, [-1, 4])
-    # 丢弃越界的anchors
-    is_valid_anchors = tf.logical_and(tf.less_equal(anchors[:, 2], strides * H),  # 步长*feature map的高度就是图像高度
-                                      tf.logical_and(tf.less_equal(anchors[:, 3], strides * W),
+    # 丢弃越界的anchors;   步长*feature map的高度就是图像高度
+    is_valid_anchors = tf.logical_and(tf.less_equal(anchors[:, 2], tf.cast(strides * H, tf.float32)),
+                                      tf.logical_and(tf.less_equal(anchors[:, 3], tf.cast(strides * W)),
                                                      tf.logical_and(tf.greater_equal(anchors[:, 0], 0),
                                                                     tf.greater_equal(anchors[:, 1], 0))))
     return tf.reshape(anchors, [-1, 4]), is_valid_anchors
