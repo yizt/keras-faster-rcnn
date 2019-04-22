@@ -8,6 +8,8 @@ GT 工具类
 
 """
 import numpy as np
+import argparse
+import sys
 from pyclustering.cluster.kmeans import kmeans
 from pyclustering.utils.metric import type_metric, distance_metric
 from faster_rcnn.config import current_config as config
@@ -64,28 +66,78 @@ def gt_boxes_cluster(gt_boxes, centers=5):
     height = height[sort_indices]
     width = width[sort_indices]
 
-    return list(height), list(width)
+    return height, width
 
 
-def main():
+def compute_iou(ha, wa, hb, wb):
+    """
+    根据长宽计算iou
+    :param ha: [n]
+    :param wa: [n]
+    :param hb: [m]
+    :param wb: [m]
+    :return:
+    """
+    # 扩维
+    ha, wa = ha[:, np.newaxis], wa[:, np.newaxis]
+    hb, wb = hb[np.newaxis, :], wb[np.newaxis, :]
+    overlap = np.minimum(ha, hb) * np.minimum(wa, wb)  # [n,m]
+    iou = overlap / (ha * wa + hb * wb - overlap)
+    return iou
+
+
+def analyze_anchors(gt_boxes, gt_labels, h, w):
+    """
+    分析anchor 长宽效果;
+    :param gt_boxes: [n,(y1,x1,y2,x2)]
+    :param gt_labels: [n]
+    :param h: [m]
+    :param w: [m]
+    :return:
+    """
+    gt_h = gt_boxes[:, 2] - gt_boxes[:, 0]
+    gt_w = gt_boxes[:, 3] - gt_boxes[:, 1]
+
+    num_classes = np.max(gt_labels) + 1
+    iou_dict = dict()
+    for label in np.arange(1, num_classes):
+        indices = np.where(gt_labels == label)
+        iou = compute_iou(gt_h[indices], gt_w[indices], h, w)  # [boxes_num,anchors_num]
+        iou_dict[label] = np.mean(np.max(iou, axis=1))
+
+    return iou_dict
+
+
+def main(args):
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
 
     # 获取缩放图像后的gt_boxes
     gt_boxes_list = []
+    gt_label_list = []
     for info in dataset.get_image_info_list():
         h, w, window, scale, padding = image_utils.resize_meta(info['height'],
                                                                info['width'],
                                                                config.IMAGE_MAX_DIM)
         boxes = image_utils.adjust_box(info['boxes'], padding, scale)
         gt_boxes_list.append(boxes)
+        gt_label_list.append(info['labels'])
 
     gt_boxes = np.concatenate(gt_boxes_list, axis=0)  # 合并
     # 对高度和宽度聚类
-    h, w = gt_boxes_cluster(gt_boxes, 5)
-    print("h:{} \nw:{}".format(h, w))
+    h, w = gt_boxes_cluster(gt_boxes, args.clusters)
+    print("h:{} \nw:{}".format(list(h), list(w)))
     print("ratio:{}".format([round(x[0] / x[1], 2) for x in zip(h, w)]))
+
+    # 分析anchors尺寸的效果
+    gt_labels = np.concatenate(gt_label_list, axis=0)
+    ious = analyze_anchors(gt_boxes, gt_labels, h, w)
+    print("ious:{}".format(ious))
+    print("mean iou:{}".format(sum(ious.values()) / len(ious.values())))
 
 
 if __name__ == '__main__':
-    main()
+    parse = argparse.ArgumentParser()
+    parse.add_argument("--clusters", type=int, default=5, help="cluster num")
+    argments = parse.parse_args(sys.argv[1:])
+    main(argments)
