@@ -29,7 +29,8 @@ def main(args):
     test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == args.data_set]
     print("len:{}".format(len(test_image_info_list)))
     gen = Generator(test_image_info_list,
-                    config.IMAGE_INPUT_SHAPE)
+                    config.IMAGE_INPUT_SHAPE,
+                    config.MEAN_PIXEL)
     # 加载模型
     m = models.frcnn(config, stage='test')
     if args.weight_path is not None:

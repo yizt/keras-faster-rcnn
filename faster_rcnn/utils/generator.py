@@ -47,13 +47,14 @@ def image_crop(image, gt_boxes):
 
 
 class Generator(object):
-    def __init__(self, annotation_list, input_shape, batch_size=1, max_gt_num=50,
+    def __init__(self, annotation_list, input_shape, mean_pixel, batch_size=1, max_gt_num=50,
                  horizontal_flip=False, random_crop=False,
                  **kwargs):
         """
 
         :param annotation_list:
         :param input_shape:
+        :param mean_pixel:
         :param batch_size:
         :param max_gt_num:
         :param horizontal_flip:
@@ -62,6 +63,7 @@ class Generator(object):
         """
         self.input_shape = input_shape
         self.annotation_list = annotation_list
+        self.mean_pixel = mean_pixel
         self.batch_size = batch_size
         self.max_gt_num = max_gt_num
         self.horizontal_flip = horizontal_flip
@@ -99,7 +101,7 @@ class Generator(object):
                     batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
                         np.expand_dims(self.annotation_list[index]['labels'], axis=1),
                         self.max_gt_num)
-
+                images = np.asarray(images, np.float32) - self.mean_pixel  # 减去均值
                 yield {"input_image": images,
                        "input_image_meta": image_metas,
                        "input_gt_boxes": batch_gt_boxes,
@@ -115,7 +117,7 @@ class Generator(object):
             image = image_utils.load_image(self.annotation_list[idx]['filepath'])
             image, image_meta, _ = image_utils.resize_image_and_gt(image,
                                                                    self.input_shape[0])
-
+            image = np.asarray(image, np.float32) - self.mean_pixel  # 减去均值
             if idx % 200 == 0:
                 print("开始预测:{}张图像".format(idx))
             yield {"input_image": np.asarray([image]),
