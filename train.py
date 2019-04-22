@@ -18,7 +18,7 @@ from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.generator import Generator
 from faster_rcnn.layers import models
 from faster_rcnn.utils import model_utils
-from keras.callbacks import TensorBoard, ModelCheckpoint, ReduceLROnPlateau, Callback
+from keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
 
 
 def set_gpu_growth(gpu_count):
@@ -42,16 +42,6 @@ layer_regex = {
 }
 
 
-class TrainLayerCallBack(Callback):
-    def on_epoch_begin(self, epoch, logs=None):
-        if epoch == 1:
-            models.set_trainable(layer_regex['heads'], self.model)
-        elif epoch == 21:
-            models.set_trainable(layer_regex['5+'], self.model)
-        elif epoch == 81:
-            models.set_trainable(layer_regex['all'], self.model)
-
-
 def get_call_back(stage):
     """
     定义call back
@@ -63,15 +53,12 @@ def get_call_back(stage):
                                  save_best_only=False,
                                  save_weights_only=True,
                                  period=5)
-    # 验证误差没有提升
-    lr_reducer = ReduceLROnPlateau(monitor='val_loss',
-                                   factor=0.1,
-                                   cooldown=0,
-                                   patience=10,
-                                   min_lr=1e-4)
-    train_layer = TrainLayerCallBack()
+
+    scheduler = LearningRateScheduler(lambda epoch:
+                                      config.LEARNING_RATE if epoch < 80 else config.LEARNING_RATE / 10.)
+
     log = TensorBoard(log_dir='log')
-    return [checkpoint, lr_reducer, train_layer, log]
+    return [checkpoint, scheduler, log]
 
 
 def main(args):
@@ -103,21 +90,20 @@ def main(args):
                         config.MEAN_PIXEL,
                         config.BATCH_SIZE,
                         config.MAX_GT_INSTANCES)
-
-    models.set_trainable(layer_regex['heads'], m)
-
+    # 训练conv3 及以上
+    models.set_trainable(layer_regex['3+'], m)
     loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
     model_utils.compile(m, config.LEARNING_RATE, config.LEARNING_MOMENTUM,
                         config.GRADIENT_CLIP_NORM, config.WEIGHT_DECAY, loss_names, config.LOSS_WEIGHTS)
     m.summary()
     # # 增加个性化度量
-    # layer = m.inner_model.get_layer('rpn_target')
-    # metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
-    # model_utils.add_metrics(m, metric_names, layer.output[-4:])
-    #
-    # layer = m.inner_model.get_layer('rcnn_target')
-    # metric_names = ['rcnn_miss_match_gt_num']
-    # model_utils.add_metrics(m, metric_names, layer.output[-1:])
+    layer = m.inner_model.get_layer('rpn_target') if config.GPU_COUNT > 1 else m.get_layer('rpn_target')
+    metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
+    model_utils.add_metrics(m, metric_names, layer.output[-4:], config.GPU_COUNT)
+
+    layer = m.inner_model.get_layer('rcnn_target') if config.GPU_COUNT > 1 else m.get_layer('rcnn_target')
+    metric_names = ['rcnn_miss_match_gt_num']
+    model_utils.add_metrics(m, metric_names, layer.output[-1:], config.GPU_COUNT)
 
     # 训练
     m.fit_generator(train_gen.gen(),
