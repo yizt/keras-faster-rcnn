@@ -76,4 +76,4 @@ def add_metrics(keras_model, metric_name_list, metric_tensor_list):
     """
     for name, tensor in zip(metric_name_list, metric_tensor_list):
         keras_model.metrics_names.append(name)
-        keras_model.metrics_tensors.append(tf.reduce_mean(tensor, keep_dims=True))
+        keras_model.metrics_tensors.append(tf.reduce_mean(tensor, keep_dims=False))
