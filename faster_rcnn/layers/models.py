@@ -23,6 +23,7 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 from faster_rcnn.utils.parallel_model import ParallelModel
 from faster_rcnn.utils.utils import log
+from faster_rcnn.layers.base_net import conv_block, identity_block
 
 
 def rpn_net(config, stage='train'):
@@ -192,20 +193,25 @@ def rpn(base_layers, num_anchors):
 def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
     # RoiAlign
     x = RoiAlign(image_max_dim)([base_layers, rois])  #
+    x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+    # 全局平均池化(batch_size,roi_num,channels)
+    shared_layer = layers.GlobalAvgPool2D()(x)
     # 用卷积来实现两个全连接
-    x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
-        x)  # 变为(batch_size,roi_num,1,1,channels)
-    x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
-    x = layers.Activation(activation='relu')(x)
-    x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
-
-    x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
-    x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
-    x = layers.Activation(activation='relu')(x)
-    x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
+    # x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
+    #     x)  # 变为(batch_size,roi_num,1,1,channels)
+    # x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
+    # x = layers.Activation(activation='relu')(x)
+    # x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
+    #
+    # x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
+    # x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
+    # x = layers.Activation(activation='relu')(x)
+    # x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
 
     # 收缩维度
-    shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
+    # shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
 
     # 分类
     class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear'), name='rcnn_class_logits')(
