@@ -103,8 +103,9 @@ def frcnn(config, stage='train'):
                                          name='rpn2proposals')([boxes_regress, class_logits, anchors, anchors_tag])
     # proposal裁剪到图像窗口内
     proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
-    # windows = Lambda(lambda x: x[:, 7:11])(input_image_meta)
-    proposal_boxes_coordinate = ClipBoxes()([proposal_boxes_coordinate, windows])
+    # proposal_boxes_coordinate = ClipBoxes()([proposal_boxes_coordinate, windows])
+    proposal_boxes_coordinate = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE,
+                                                name='clip_proposals')(proposal_boxes_coordinate)
     # 最后再合并tag返回
     proposal_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([proposal_boxes_coordinate, proposal_boxes_tag])
 
@@ -250,9 +251,6 @@ def set_trainable(layer_regex, keras_model, indent=0, verbose=1):
         if trainable and verbose > 0:
             log("{}{:20}   ({})".format(" " * indent, layer.name,
                                         layer.__class__.__name__))
-
-
-
 
 
 def main():
