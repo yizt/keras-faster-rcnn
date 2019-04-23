@@ -7,7 +7,6 @@ Created on 2018/12/15 下午10:35
 frcnn模型
 
 """
-import keras
 import re
 from keras import layers, backend
 from keras.models import Model
@@ -121,8 +120,9 @@ def frcnn(config, stage='train'):
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois, _ = DetectTarget(batch_size, config.TRAIN_ROIS_PER_IMAGE,
-                                                                config.ROI_POSITIVE_RATIO, name='rcnn_target')(
+        roi_deltas, roi_class_ids, train_rois, rcnn_miss_gt_num = DetectTarget(batch_size, config.TRAIN_ROIS_PER_IMAGE,
+                                                                               config.ROI_POSITIVE_RATIO,
+                                                                               name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
@@ -133,9 +133,17 @@ def frcnn(config, stage='train'):
             [rcnn_deltas, roi_deltas, roi_class_ids])
         cls_loss_rcnn = Lambda(lambda x: detect_cls_loss(*x), name='rcnn_class_loss')(
             [rcnn_class_logits, roi_class_ids])
-
+        # 自定义度量命名
+        gt_num, positive_num, rpn_miss_gt_num, gt_match_min_iou = rpn_targets[3:]
+        gt_num = Lambda(lambda x: tf.identity(x), name='identity_gt_num')(gt_num)
+        positive_num = Lambda(lambda x: tf.identity(x), name='identity_positive_num')(positive_num)
+        rpn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rpn_miss_gt_num')(rpn_miss_gt_num)
+        gt_match_min_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_match_min_iou')(gt_match_min_iou)
+        # 构建模型
         model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
-                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn])
+                      outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn] + [
+                          gt_num, positive_num, rpn_miss_gt_num, gt_match_min_iou,
+                          rcnn_miss_gt_num])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
         if config.GPU_COUNT > 1:
             model = ParallelModel(model, config.GPU_COUNT)
@@ -244,9 +252,7 @@ def set_trainable(layer_regex, keras_model, indent=0, verbose=1):
                                         layer.__class__.__name__))
 
 
-def resnet_test_net(input):
-    x = Conv2D(512, (1, 1), strides=(32, 32))(input)
-    return x
+
 
 
 def main():
@@ -254,7 +260,6 @@ def main():
     # model = resnet50(Input((224, 224, 3)))
     # model.summary()
     x = tf.ones(shape=(5, 4, 1, 1, 3))
-    import keras.backend as K
     y = tf.squeeze(x, 3)
     sess = tf.Session()
     print(sess.run(y))

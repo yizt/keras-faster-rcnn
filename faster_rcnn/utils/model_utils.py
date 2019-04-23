@@ -66,20 +66,14 @@ def compile(keras_model, lr, momentum, clipnorm, weight_decay, loss_names=[], lo
         keras_model.metrics_tensors.append(loss)
 
 
-def add_metrics(keras_model, metric_name_list, metric_tensor_list, gpu_num=1):
+def add_metrics(keras_model, metric_name_list, metric_tensor_list):
     """
     增加度量
     :param keras_model: 模型
     :param metric_name_list: 度量名称列表
     :param metric_tensor_list: 度量张量列表
-    :param gpu_num: 数量
     :return: 无
     """
     for name, tensor in zip(metric_name_list, metric_tensor_list):
         keras_model.metrics_names.append(name)
-        # 如果有gpu并行，且度量不是标量
-        if gpu_num > 1:
-            tensor = tf.cond(tf.greater(tf.size(tf.shape(tensor)), 0),
-                             true_fn=lambda: tf.concat([tensor] * gpu_num, axis=0),
-                             false_fn=lambda: tensor)
-        keras_model.metrics_tensors.append(tf.reduce_mean(tensor, keepdims=True))
+        keras_model.metrics_tensors.append(tf.reduce_mean(tensor, keep_dims=True))

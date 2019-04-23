@@ -96,14 +96,10 @@ def main(args):
     model_utils.compile(m, config.LEARNING_RATE, config.LEARNING_MOMENTUM,
                         config.GRADIENT_CLIP_NORM, config.WEIGHT_DECAY, loss_names, config.LOSS_WEIGHTS)
     m.summary()
-    # # 增加个性化度量
-    layer = m.inner_model.get_layer('rpn_target') if config.GPU_COUNT > 1 else m.get_layer('rpn_target')
-    metric_names = ['gt_num', 'positive_anchor_num', 'miss_match_gt_num', 'gt_match_min_iou']
-    model_utils.add_metrics(m, metric_names, layer.output[-4:], config.GPU_COUNT)
-
-    layer = m.inner_model.get_layer('rcnn_target') if config.GPU_COUNT > 1 else m.get_layer('rcnn_target')
-    metric_names = ['rcnn_miss_match_gt_num']
-    model_utils.add_metrics(m, metric_names, layer.output[-1:], config.GPU_COUNT)
+    # 增加个性化度量
+    metric_names = ['gt_num', 'positive_anchor_num', 'rpn_miss_gt_num',
+                    'gt_match_min_iou', 'rcnn_miss_gt_num']
+    model_utils.add_metrics(m, metric_names, m.outputs[-5:])
 
     # 训练
     m.fit_generator(train_gen.gen(),
