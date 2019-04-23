@@ -23,7 +23,7 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 from faster_rcnn.utils.parallel_model import ParallelModel
 from faster_rcnn.utils.utils import log
-from faster_rcnn.layers.base_net import conv_block, identity_block
+from faster_rcnn.layers.base_net import conv_block_5d, identity_block_5d
 
 
 def rpn_net(config, stage='train'):
@@ -193,11 +193,11 @@ def rpn(base_layers, num_anchors):
 def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
     # RoiAlign
     x = RoiAlign(image_max_dim)([base_layers, rois])  #
-    x = conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
-    x = identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+    x = conv_block_5d(x, 3, [512, 512, 2048], stage=5, block='a', strides=(1, 1))
+    x = identity_block_5d(x, 3, [512, 512, 2048], stage=5, block='b')
+    x = identity_block_5d(x, 3, [512, 512, 2048], stage=5, block='c')
     # 全局平均池化(batch_size,roi_num,channels)
-    shared_layer = layers.GlobalAvgPool2D()(x)
+    shared_layer = layers.TimeDistributed(layers.GlobalAvgPool2D())(x)
     # 用卷积来实现两个全连接
     # x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
     #     x)  # 变为(batch_size,roi_num,1,1,channels)
