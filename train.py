@@ -97,9 +97,9 @@ def main(args):
                         config.GRADIENT_CLIP_NORM, config.WEIGHT_DECAY, loss_names, config.LOSS_WEIGHTS)
     m.summary()
     # 增加个性化度量
-    metric_names = ['gt_num', 'positive_anchor_num', 'rpn_miss_gt_num',
+    metric_names = ['gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
                     'gt_match_min_iou', 'positive_roi_num', 'rcnn_miss_gt_num']
-    model_utils.add_metrics(m, metric_names, m.outputs[-6:])
+    model_utils.add_metrics(m, metric_names, m.outputs[-7:])
 
     # 训练
     m.fit_generator(train_gen.gen(),

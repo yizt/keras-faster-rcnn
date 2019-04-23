@@ -136,9 +136,10 @@ def frcnn(config, stage='train'):
         cls_loss_rcnn = Lambda(lambda x: detect_cls_loss(*x), name='rcnn_class_loss')(
             [rcnn_class_logits, roi_class_ids])
         # 自定义度量命名
-        gt_num, positive_num, rpn_miss_gt_num, gt_match_min_iou = rpn_targets[3:]
+        gt_num, positive_num, negative_num, rpn_miss_gt_num, gt_match_min_iou = rpn_targets[3:]
         gt_num = Lambda(lambda x: tf.identity(x), name='identity_gt_num')(gt_num)
         positive_num = Lambda(lambda x: tf.identity(x), name='identity_positive_num')(positive_num)
+        negative_num = Lambda(lambda x: tf.identity(x), name='identity_negative_num')(negative_num)
         rpn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rpn_miss_gt_num')(rpn_miss_gt_num)
         gt_match_min_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_match_min_iou')(gt_match_min_iou)
         rcnn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rcnn_miss_gt_num')(rcnn_miss_gt_num)
@@ -147,7 +148,7 @@ def frcnn(config, stage='train'):
         # 构建模型
         model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
                       outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn] + [
-                          gt_num, positive_num, rpn_miss_gt_num, gt_match_min_iou,
+                          gt_num, positive_num, negative_num, rpn_miss_gt_num, gt_match_min_iou,
                           pos_roi_num, rcnn_miss_gt_num])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
         if config.GPU_COUNT > 1:

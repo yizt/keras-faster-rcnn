@@ -127,7 +127,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
                                         name='rpn_positive_anchors_concat')
 
     # 根据正负样本比1:1,确定最终的正样本
-    positive_num = tf.minimum(tf.shape(positive_anchor_indices)[0], int(rpn_train_anchors * 0.5))
+    positive_num = tf.minimum(tf.shape(positive_anchor_indices)[0], int(rpn_train_anchors * 0.9))
     positive_anchor_indices, positive_gt_indices = shuffle_sample(
         [positive_anchor_indices, positive_gt_indices],
         tf.shape(positive_anchor_indices)[0],
@@ -143,8 +143,9 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
     negative_indices = tf.where(anchors_iou_max < 0.3, name='rpn_target_negative_indices')  # [:, 0]
 
     # 负样本,保证负样本不超过一半
-    negative_num = tf.minimum(int(rpn_train_anchors * 0.5),
+    negative_num = tf.minimum(rpn_train_anchors - positive_num,
                               tf.shape(negative_indices)[0], name='rpn_target_negative_num')
+    negative_num = tf.minimum(int(rpn_train_anchors * 0.5), negative_num, name='rpn_target_negative_num_2')
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
     negative_gt_cls = tf.zeros([negative_num])  # 负样本类别id为0
     negative_deltas = tf.zeros([negative_num, 4])
@@ -170,6 +171,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
     return [deltas, class_ids, indices,
             tf_utils.scalar_to_1d_tensor(gt_num),
             tf_utils.scalar_to_1d_tensor(positive_num),
+            tf_utils.scalar_to_1d_tensor(negative_num),
             tf_utils.scalar_to_1d_tensor(miss_match_gt_num),
             tf_utils.scalar_to_1d_tensor(gt_match_min_iou)]
 
@@ -218,6 +220,7 @@ class RpnTarget(keras.layers.Layer):
         return [(input_shape[0][0], self.train_anchors_per_image, 5),
                 (input_shape[0][0], self.train_anchors_per_image, 2),  # 只有两类
                 (input_shape[0][0], self.train_anchors_per_image, 2),
+                (input_shape[0][0], 1),
                 (input_shape[0][0], 1),
                 (input_shape[0][0], 1),
                 (input_shape[0][0], 1),
