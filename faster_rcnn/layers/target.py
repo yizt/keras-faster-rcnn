@@ -331,7 +331,9 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     # 其它统计指标
     gt_num = tf.shape(gt_class_ids)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(gt_pos_idx)[0])[0]  # 未分配anchor的GT
-    return [deltas, class_ids, train_rois, tf_utils.scalar_to_1d_tensor(miss_match_gt_num)]
+    return [deltas, class_ids, train_rois,
+            tf_utils.scalar_to_1d_tensor(miss_match_gt_num),
+            tf_utils.scalar_to_1d_tensor(positive_num)]
 
 
 class DetectTarget(keras.layers.Layer):
@@ -375,7 +377,8 @@ class DetectTarget(keras.layers.Layer):
         return [(input_shape[0][0], self.train_rois_per_image, 4 + 1),  # deltas
                 (input_shape[0][0], self.train_rois_per_image, 1 + 1),  # class_ids
                 (input_shape[0][0], self.train_rois_per_image, 4 + 1),
-                (input_shape[0][0], 1)]  # miss_match_gt_num
+                (input_shape[0][0], 1),  # miss_match_gt_num
+                (input_shape[0][0], 1)]  # positive_roi_num
 
 
 def main():

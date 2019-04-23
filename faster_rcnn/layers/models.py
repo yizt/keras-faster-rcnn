@@ -121,9 +121,10 @@ def frcnn(config, stage='train'):
             [boxes_regress, rpn_deltas, anchor_indices])
 
         # 检测网络的分类和回归目标
-        roi_deltas, roi_class_ids, train_rois, rcnn_miss_gt_num = DetectTarget(batch_size, config.TRAIN_ROIS_PER_IMAGE,
-                                                                               config.ROI_POSITIVE_RATIO,
-                                                                               name='rcnn_target')(
+        roi_deltas, roi_class_ids, train_rois, rcnn_miss_gt_num, pos_roi_num = DetectTarget(batch_size,
+                                                                                            config.TRAIN_ROIS_PER_IMAGE,
+                                                                                            config.ROI_POSITIVE_RATIO,
+                                                                                            name='rcnn_target')(
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
@@ -140,11 +141,14 @@ def frcnn(config, stage='train'):
         positive_num = Lambda(lambda x: tf.identity(x), name='identity_positive_num')(positive_num)
         rpn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rpn_miss_gt_num')(rpn_miss_gt_num)
         gt_match_min_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_match_min_iou')(gt_match_min_iou)
+        rcnn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rcnn_miss_gt_num')(rcnn_miss_gt_num)
+        pos_roi_num = Lambda(lambda x: tf.identity(x), name='identity_pos_roi_num')(pos_roi_num)
+
         # 构建模型
         model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
                       outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn] + [
                           gt_num, positive_num, rpn_miss_gt_num, gt_match_min_iou,
-                          rcnn_miss_gt_num])  # 在并行model中所有自定义度量必须在output中
+                          pos_roi_num, rcnn_miss_gt_num])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
         if config.GPU_COUNT > 1:
             model = ParallelModel(model, config.GPU_COUNT)
