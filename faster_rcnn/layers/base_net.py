@@ -25,13 +25,6 @@ def resnet50(inputs):
     x = conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
-    # # 确定精调层
-    no_train_model = Model(inputs=input, outputs=x)
-    for l in no_train_model.layers:
-        if isinstance(l, layers.BatchNormalization):
-            l.trainable = True
-        else:
-            l.trainable = False
 
     x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
