@@ -6,13 +6,14 @@ Created on 2019/3/24 下午9:51
 @author: mick.yi
 
 """
-from keras import layers, Model, backend
+from keras import layers, backend, Model
+from keras.layers import TimeDistributed, Conv2D
 
 
-def resnet50(input):
+def resnet50(inputs):
     bn_axis = 3
     #
-    x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(input)
+    x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(inputs)
     x = layers.Conv2D(64, (7, 7),
                       strides=(2, 2),
                       padding='valid',
@@ -25,12 +26,12 @@ def resnet50(input):
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='b')
     x = identity_block(x, 3, [64, 64, 256], stage=2, block='c')
     # # 确定精调层
-    # no_train_model = Model(inputs=input, outputs=x)
-    # for l in no_train_model.layers:
-    #     if isinstance(l, layers.BatchNormalization):
-    #         l.trainable = True
-    #     else:
-    #         l.trainable = False
+    no_train_model = Model(inputs=input, outputs=x)
+    for l in no_train_model.layers:
+        if isinstance(l, layers.BatchNormalization):
+            l.trainable = True
+        else:
+            l.trainable = False
 
     x = conv_block(x, 3, [128, 128, 512], stage=3, block='a')
     x = identity_block(x, 3, [128, 128, 512], stage=3, block='b')
@@ -50,6 +51,106 @@ def resnet50(input):
 
     # model = Model(input, x, name='resnet50')
 
+    return x
+
+
+def resnet50_head(features):
+    filters = 512
+    x = features
+    x = conv_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='a', strides=(2, 2))
+    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='b')
+    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='c')
+    # 全局平均池化(batch_size,roi_num,channels)
+    x = layers.TimeDistributed(layers.GlobalAvgPool2D())(x)
+    return x
+
+
+def vgg16(inputs):
+    x = layers.Conv2D(64, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block1_conv1')(inputs)
+    x = layers.Conv2D(64, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block1_conv2')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block1_pool')(x)
+
+    # Block 2
+    x = layers.Conv2D(128, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block2_conv1')(x)
+    x = layers.Conv2D(128, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block2_conv2')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block2_pool')(x)
+
+    # Block 3
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block3_conv1')(x)
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block3_conv2')(x)
+    x = layers.Conv2D(256, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block3_conv3')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block3_pool')(x)
+
+    # Block 4
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block4_conv1')(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block4_conv2')(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block4_conv3')(x)
+    x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block4_pool')(x)
+
+    # Block 5
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block5_conv1')(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block5_conv2')(x)
+    x = layers.Conv2D(512, (3, 3),
+                      activation='relu',
+                      padding='same',
+                      name='block5_conv3')(x)
+    # x = layers.MaxPooling2D((2, 2), strides=(2, 2), name='block5_pool')(x)
+    return x
+
+
+def vgg16_head(features, fc_layers_size=4096):
+    """
+
+    :param features: [batch_size,rois_num,H,W,C]
+    :param fc_layers_size:
+    :return:
+    """
+    # 打平
+    x = TimeDistributed(layers.Flatten(features))  # [batch_size,rois_num,H*W*C]
+    # fc6
+    x = TimeDistributed(layers.Dense(fc_layers_size), name='fc1')(x)  # 变为(batch_size,roi_num,channels)
+    x = layers.Activation(activation='relu')(x)
+    x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
+
+    x = TimeDistributed(layers.Dense(fc_layers_size), name='f2')(x)  # 变为(batch_size,roi_num,channels)
+    x = layers.Activation(activation='relu')(x)
+    x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
     return x
 
 
