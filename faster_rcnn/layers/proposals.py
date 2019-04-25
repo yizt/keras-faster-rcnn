@@ -87,7 +87,7 @@ class RpnToProposal(keras.layers.Layer):
     生成候选框
     """
 
-    def __init__(self, batch_size, score_threshold=0.05, output_box_num=2000, iou_threshold=0.7, **kwargs):
+    def __init__(self, batch_size, score_threshold=0., output_box_num=2000, iou_threshold=0.7, **kwargs):
         """
         :param batch_size:
         :param score_threshold: 分数阈值

@@ -106,8 +106,8 @@ def main(args):
     m.summary()
     # 增加个性化度量
     metric_names = ['gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
-                    'gt_match_min_iou', 'positive_roi_num', 'rcnn_miss_gt_num']
-    model_utils.add_metrics(m, metric_names, m.outputs[-7:])
+                    'gt_match_min_iou', 'roi_num', 'positive_roi_num', 'rcnn_miss_gt_num']
+    model_utils.add_metrics(m, metric_names, m.outputs[-8:])
 
     # 训练
     m.fit_generator(train_gen.gen(),
