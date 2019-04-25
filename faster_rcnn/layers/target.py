@@ -254,54 +254,20 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     gt_boxes = tf_utils.remove_pad(gt_boxes)
     gt_class_ids = tf_utils.remove_pad(gt_class_ids)[:, 0]  # 从[N,1]变为[N]
     proposals = tf_utils.remove_pad(proposals)
+    proposals_num = tf.shape(proposals)[0]
     # 计算iou
-    iou = compute_iou(gt_boxes, proposals)
+    iou = compute_iou(gt_boxes, proposals)  # [gt_num,rois_num]
 
-    # 每个GT边框IoU最大的proposal为正
-    # gt_iou_argmax = tf.argmax(iou, axis=1)
-    gt_iou_argmax = tf.cond(  # 需要考虑proposal个数为0的情况
-        tf.greater(tf.shape(proposals)[0], 0),
-        true_fn=lambda: tf.argmax(iou, axis=1),
-        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
-    )
+    # iou >=0.5为正
+    proposals_iou_max = tf.reduce_max(iou, axis=0)  # [rois_num]
+    positive_indices = tf.where(tf.logical_and(tf.equal(iou, proposals_iou_max),
+                                               tf.greater_equal(iou, 0.5)))
+    gt_pos_idx = positive_indices[:, 0]  # 第一维gt索引
+    proposal_pos_idx = positive_indices[:, 1]  # 第二位rois索引
 
-    # GT和对应的proposal
-    # gt_boxes_pos_1 = tf.identity(gt_boxes)
-    # gt_class_ids_pos_1 = tf.identity(gt_class_ids)
-    # proposal_pos_1 = tf.gather(proposals, gt_iou_argmax)
-
-    # 在接下来的操作之前提出已经被选中的proposal
-    indices = tf.unique(gt_iou_argmax)[0]  # 被选中的索引
-    all_indices = tf.range(tf.shape(proposals)[0])  # 所有的索引
-    remainder_indices = tf.setdiff1d(all_indices, tf.cast(indices, tf.int32))[0]  # 剩余的索引
-    # 剩余的proposals和iou
-    proposals = tf.gather(proposals, remainder_indices)
-    iou = tf.gather(iou, remainder_indices, axis=1)
-
-    # 正样本每个proposal 最大的iou,且iou>=0.5
-    proposal_iou_max = tf.reduce_max(iou, axis=0)
-    proposal_pos_idx = tf.where(proposal_iou_max >= 0.5)  # 正样本proposal对应的索引号,二维
-
-    # proposal_iou_argmax = tf.argmax(iou, axis=0)
-    proposal_iou_argmax = tf.cond(  # 需要考虑GT个数为0的情况
-        tf.greater(tf.shape(gt_boxes)[0], 0),
-        true_fn=lambda: tf.argmax(iou, axis=0),
-        false_fn=lambda: tf.cast(tf.constant([]), tf.int64)
-    )
-    gt_pos_idx = tf.gather_nd(proposal_iou_argmax, proposal_pos_idx)  # 对应的GT 索引号，一维的
-
-    gt_boxes_pos_2 = tf.gather(gt_boxes, gt_pos_idx)
-    gt_class_ids_pos_2 = tf.gather(gt_class_ids, gt_pos_idx)
-    proposal_pos_2 = tf.gather_nd(proposals, proposal_pos_idx)
-
-    # 合并两部分正样本
-    # gt_boxes_pos = tf.concat([gt_boxes_pos_1, gt_boxes_pos_2], axis=0)
-    # class_ids = tf.concat([gt_class_ids_pos_1, gt_class_ids_pos_2], axis=0)
-    # proposal_pos = tf.concat([proposal_pos_1, proposal_pos_2], axis=0)
-    gt_boxes_pos = gt_boxes_pos_2
-    class_ids = gt_class_ids_pos_2
-    proposal_pos = proposal_pos_2
-
+    gt_boxes_pos = tf.gather(gt_boxes, gt_pos_idx)
+    class_ids = tf.gather(gt_class_ids, gt_pos_idx)
+    proposal_pos = tf.gather(proposals, proposal_pos_idx)
     # 根据正负样本比确定最终的正样本
     positive_num = tf.minimum(tf.shape(proposal_pos)[0], int(train_rois_per_image * roi_positive_ratio))
     gt_boxes_pos, class_ids, proposal_pos = shuffle_sample([gt_boxes_pos, class_ids, proposal_pos],
@@ -312,12 +278,17 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     deltas = regress_target(proposal_pos, gt_boxes_pos)
 
     # 负样本：与所有GT的iou<0.5且iou>0.1
-    proposal_neg_idx = tf.where(tf.logical_and(proposal_iou_max < 0.5, proposal_iou_max > 0.1))
+    proposal_iou_max = tf.reduce_max(iou, axis=0)
+    proposal_neg_idx = tf.cond(  # 需要考虑GT个数为0的情况;全部都是负样本
+        tf.greater(tf.shape(gt_boxes)[0], 0),
+        true_fn=lambda: tf.where(tf.logical_and(proposal_iou_max < 0.5, proposal_iou_max > 0.1))[:, 0],
+        false_fn=lambda: tf.cast(tf.range(proposals_num), dtype=tf.int64)
+    )
     # 确定负样本数量
     negative_num = tf.minimum(train_rois_per_image - positive_num, tf.shape(proposal_neg_idx)[0])
     proposal_neg_idx = tf.random_shuffle(proposal_neg_idx)[:negative_num]
     # 收集负样本
-    proposal_neg = tf.gather_nd(proposals, proposal_neg_idx)
+    proposal_neg = tf.gather(proposals, proposal_neg_idx)
     class_ids_neg = tf.zeros(shape=[negative_num])  # 背景类，类别id为0
     deltas_neg = tf.zeros(shape=[negative_num, 4])
 
