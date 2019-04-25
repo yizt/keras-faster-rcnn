@@ -64,6 +64,13 @@ def nms(boxes, scores, class_logits, anchors_tag, max_output_size, iou_threshold
     boxes = tf.gather(boxes, valid_anchor_indices)
     scores = tf.gather(scores, valid_anchor_indices)
     class_logits = tf.gather(class_logits, valid_anchor_indices)
+    # 取top 6000个rois
+    pre_nms_limit = tf.minimum(6000, tf.shape(scores)[0])
+    ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
+                     name="top_anchors").indices
+    scores = tf.gather(scores, ix)
+    boxes = tf.gather(boxes, ix)
+    class_logits = tf.gather(class_logits, ix)
     # nms
     indices = tf.image.non_max_suppression(boxes, scores, max_output_size, iou_threshold, score_threshold, name)  # 一维索引
     output_boxes = tf.gather(boxes, indices)  # (M,4)
