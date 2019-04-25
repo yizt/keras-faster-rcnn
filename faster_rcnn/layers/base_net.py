@@ -134,21 +134,21 @@ def vgg16(inputs):
     return x
 
 
-def vgg16_head(features, fc_layers_size=4096):
+def vgg16_head(features):
     """
 
     :param features: [batch_size,rois_num,H,W,C]
-    :param fc_layers_size:
     :return:
     """
+    fc_layers_size = 4096
     # 打平
-    x = TimeDistributed(layers.Flatten(features))  # [batch_size,rois_num,H*W*C]
+    x = TimeDistributed(layers.Flatten())(features)  # [batch_size,rois_num,H*W*C]
     # fc6
     x = TimeDistributed(layers.Dense(fc_layers_size), name='fc1')(x)  # 变为(batch_size,roi_num,channels)
     x = layers.Activation(activation='relu')(x)
     x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
 
-    x = TimeDistributed(layers.Dense(fc_layers_size), name='f2')(x)  # 变为(batch_size,roi_num,channels)
+    x = TimeDistributed(layers.Dense(fc_layers_size), name='fc2')(x)  # 变为(batch_size,roi_num,channels)
     x = layers.Activation(activation='relu')(x)
     x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
     return x

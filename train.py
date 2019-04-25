@@ -42,20 +42,28 @@ layer_regex = {
 }
 
 
-def get_call_back(stage):
+def lr_schedule(epoch):
+    if epoch < 80:
+        return config.LEARNING_RATE
+    elif epoch < 100:
+        return config.LEARNING_RATE / 10.
+    else:
+        return 1e-4
+
+
+def get_call_back():
     """
     定义call back
     :return:
     """
-    checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + stage + '.{epoch:03d}.h5',
+    checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + config.BASE_NET_NAME + '.{epoch:03d}.h5',
                                  monitor='acc',
                                  verbose=1,
                                  save_best_only=False,
                                  save_weights_only=True,
                                  period=5)
 
-    scheduler = LearningRateScheduler(lambda epoch:
-                                      config.LEARNING_RATE if epoch < 80 else config.LEARNING_RATE / 10.)
+    scheduler = LearningRateScheduler(lr_schedule)
 
     log = TensorBoard(log_dir='log')
     return [checkpoint, scheduler, log]
@@ -73,7 +81,7 @@ def main(args):
     # 加载预训练模型
     init_epochs = args.init_epochs
     if args.init_epochs > 0:
-        m.load_weights('/tmp/frcnn-rcnn.{:03d}.h5'.format(init_epochs), by_name=True)
+        m.load_weights('/tmp/frcnn-{}.{:03d}.h5'.format(config.BASE_NET_NAME, init_epochs), by_name=True)
     else:
         m.load_weights(config.pretrained_weights, by_name=True)
     # 生成器
@@ -91,7 +99,7 @@ def main(args):
                         config.BATCH_SIZE,
                         config.MAX_GT_INSTANCES)
     # 训练conv3 及以上
-    models.set_trainable(layer_regex['3+'], m)
+    models.set_trainable(config.TRAIN_LAYERS, m)
     loss_names = ["rpn_bbox_loss", "rpn_class_loss", "rcnn_bbox_loss", "rcnn_class_loss"]
     model_utils.compile(m, config.LEARNING_RATE, config.LEARNING_MOMENTUM,
                         config.GRADIENT_CLIP_NORM, config.WEIGHT_DECAY, loss_names, config.LOSS_WEIGHTS)
@@ -110,7 +118,7 @@ def main(args):
                     validation_data=val_gen.gen(),
                     validation_steps=5,  # 小一点，不影响训练速度太多
                     use_multiprocessing=True,
-                    callbacks=get_call_back('rcnn'))
+                    callbacks=get_call_back())
 
 
 if __name__ == '__main__':

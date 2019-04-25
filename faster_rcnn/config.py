@@ -1,4 +1,5 @@
 import numpy as np
+from faster_rcnn.layers.base_net import vgg16, vgg16_head
 
 
 class Config(object):
@@ -26,7 +27,8 @@ class Config(object):
     RPN_ANCHOR_RATIOS = [0.5, 1, 2]
 
     # RPN提议框非极大抑制阈值(训练时可以增加该值来增加提议框)
-    RPN_NMS_THRESHOLD = 0.7
+    RPN_NMS_THRESHOLD_TRAINING = 0.7
+    RPN_NMS_THRESHOLD_INFERENCE = 0.7
     # 每张图像训练anchors个数
     RPN_TRAIN_ANCHORS_PER_IMAGE = 256
     # 训练和预测阶段NMS后保留的ROIs数
@@ -57,6 +59,7 @@ class Config(object):
     IMAGES_PER_GPU = 2
     LEARNING_RATE = 0.001
     LEARNING_MOMENTUM = 0.9
+    TRAIN_LAYERS = r".*"
     # 权重衰减
     WEIGHT_DECAY = 0.0005
     # 梯度裁剪
@@ -80,21 +83,17 @@ class Config(object):
         self.RPN_ANCHOR_NUM = len(self.RPN_ANCHOR_HEIGHTS) if self.RPN_ANCHOR_HEIGHTS is not None \
             else len(self.RPN_ANCHOR_SCALES) * len(self.RPN_ANCHOR_RATIOS)
 
+    BASE_NET_NAME = 'vgg16'
+
+    def base_fn(self, *args, **kwargs):
+        return vgg16(*args, **kwargs)
+
+    def head_fn(self, *args, **kwargs):
+        return vgg16_head(*args, **kwargs)
+
 
 class VOCConfig(Config):
-    NAME = "voc"
-    GPU_COUNT = 2
-    IMAGES_PER_GPU = 2
     NUM_CLASSES = 1 + 20  #
-    IMAGE_MAX_DIM = 1024
-    LEARNING_RATE = 0.001
-
-    RPN_ANCHOR_HEIGHTS = [76.01, 137.64, 210.27, 249.25, 350.94, 386.97, 546.33, 631.71, 707.87]
-    RPN_ANCHOR_WIDTHS = [59.84, 192.22, 98.73, 358.32, 696.61, 195.61, 348.98, 891.01, 566.18]
-
-    USE_HORIZONTAL_FLIP = True
-    USE_RANDOM_CROP = True
-
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
                      'dog': 2,
@@ -117,6 +116,48 @@ class VOCConfig(Config):
                      'motorbike': 19,
                      'aeroplane': 20
                      }
+    voc_path = '/opt/dataset/VOCdevkit'
+    pretrained_weights = None
+
+
+class VOCVggConfig(VOCConfig):
+    NAME = "voc"
+    GPU_COUNT = 2
+    IMAGES_PER_GPU = 2
+    IMAGE_MAX_DIM = 1024
+    RPN_ANCHOR_BASE_SIZE = 128
+    LEARNING_RATE = 0.003
+    # RPN_TRAIN_ANCHORS_PER_IMAGE = 80
+    RPN_NMS_THRESHOLD_TRAINING = 0.8  # 增加训练时rcnn网络正样本数量
+    POST_NMS_ROIS_INFERENCE = 300  # 加快预测速度
+
+    USE_HORIZONTAL_FLIP = True
+    TRAIN_LAYERS = r"(block3.*)|(block4.*)|(block5.*)|(fc.*)|(rcnn\_.*)|(rpn\_.*)"
+    # USE_RANDOM_CROP = True
+    pretrained_weights = '/opt/pretrained_model/vgg16_weights_tf_dim_ordering_tf_kernels.h5'
+
+
+class VOCResnetConfig(VOCConfig):
+    NAME = "voc"
+    BASE_NET_NAME = 'resnet50'
+    GPU_COUNT = 2
+    IMAGES_PER_GPU = 2
+    IMAGE_MAX_DIM = 1024
+    RPN_ANCHOR_BASE_SIZE = 128
+    LEARNING_RATE = 0.003
+    TRAIN_LAYERS = r"base_features|(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)",
+    # RPN_TRAIN_ANCHORS_PER_IMAGE = 80
+    RPN_NMS_THRESHOLD_TRAINING = 0.8  # 增加训练时rcnn网络正样本数量
+    POST_NMS_ROIS_INFERENCE = 300  # 加快预测速度
+    POOL_SIZE = (14, 14)
+
+    # RPN_ANCHOR_HEIGHTS = [76.01, 137.64, 210.27, 249.25, 350.94, 386.97, 546.33, 631.71, 707.87]
+    # RPN_ANCHOR_WIDTHS = [59.84, 192.22, 98.73, 358.32, 696.61, 195.61, 348.98, 891.01, 566.18]
+    # RPN_ANCHOR_HEIGHTS = [52.42, 85.64, 143.89, 186.92, 208.26, 266.1, 359.72, 446.26, 484.92]
+    # RPN_ANCHOR_WIDTHS = [40.85, 132.84, 66.24, 294.26, 135.53, 533.3, 190.26, 339.55, 591.88]
+
+    USE_HORIZONTAL_FLIP = True
+    # USE_RANDOM_CROP = True
 
     pretrained_weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
     rpn_weights = '/tmp/frcnn-rpn.h5'
@@ -138,8 +179,9 @@ class MacVoConfig(VOCConfig):
 
 
 # 当前配置
-current_config = VOCConfig()
+current_config = VOCVggConfig()
 
 if __name__ == '__main__':
     print("batch_size:{}".format(current_config.BATCH_SIZE))
     print("input_shape:{}".format(current_config.IMAGE_INPUT_SHAPE))
+    print("train layers:{}".format(current_config.TRAIN_LAYERS))

@@ -66,7 +66,7 @@ def rpn_net(config, stage='train'):
         # 应用分类和回归
         detect_boxes, class_scores, _ = RpnToProposal(batch_size,
                                                       output_box_num=config.POST_NMS_ROIS_INFERENCE,
-                                                      iou_threshold=config.RPN_NMS_THRESHOLD,
+                                                      iou_threshold=config.RPN_NMS_THRESHOLD_INFERENCE,
                                                       name='rpn2proposals')(
             [boxes_regress, class_logits, anchors, anchors_tag])
         return Model(inputs=[input_image, input_image_meta],
@@ -82,7 +82,7 @@ def frcnn(config, stage='train'):
     gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), name='input_gt_boxes')
 
     # 特征及预测结果
-    features = resnet50(input_image)
+    features = config.base_fn(input_image)
     boxes_regress, class_logits = rpn(features, config.RPN_ANCHOR_NUM)
 
     # 生成anchor
@@ -99,8 +99,9 @@ def frcnn(config, stage='train'):
 
     # 应用分类和回归生成proposal
     output_box_num = config.POST_NMS_ROIS_TRAINING if stage == 'train' else config.POST_NMS_ROIS_INFERENCE
+    iou_threshold = config.RPN_NMS_THRESHOLD_TRAINING if stage == 'train' else config.RPN_NMS_THRESHOLD_INFERENCE
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=output_box_num,
-                                         iou_threshold=config.RPN_NMS_THRESHOLD,
+                                         iou_threshold=iou_threshold,
                                          name='rpn2proposals')([boxes_regress, class_logits, anchors, anchors_tag])
     # proposal裁剪到图像窗口内
     proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
@@ -129,7 +130,8 @@ def frcnn(config, stage='train'):
             [gt_boxes, gt_class_ids, proposal_boxes])
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
-                                              pool_size=config.POOL_SIZE, fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
+                                              config.head_fn, pool_size=config.POOL_SIZE,
+                                              fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
 
         # 检测网络损失函数
         regress_loss_rcnn = Lambda(lambda x: detect_regress_loss(*x), name='rcnn_bbox_loss')(
@@ -158,7 +160,8 @@ def frcnn(config, stage='train'):
     else:  # 测试阶段
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, proposal_boxes, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
-                                              pool_size=config.POOL_SIZE, fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
+                                              config.head_fn, pool_size=config.POOL_SIZE,
+                                              fc_layers_size=config.RCNN_FC_LAYERS_SIZE)
         # 处理类别相关
         rcnn_deltas = layers.Lambda(lambda x: deal_delta(*x), name='deal_delta')([rcnn_deltas, rcnn_class_logits])
         # 应用分类和回归生成最终检测框
@@ -190,29 +193,11 @@ def rpn(base_layers, num_anchors):
     return x_regr, x_class
 
 
-def rcnn(base_layers, rois, num_classes, image_max_dim, pool_size=(7, 7), fc_layers_size=1024):
+def rcnn(base_layers, rois, num_classes, image_max_dim, head_fn, pool_size=(7, 7), fc_layers_size=1024):
     # RoiAlign
-    x = RoiAlign(image_max_dim)([base_layers, rois])  #
-    x = conv_block_5d(x, 3, [512, 512, 2048], stage=5, block='a', strides=(1, 1))
-    x = identity_block_5d(x, 3, [512, 512, 2048], stage=5, block='b')
-    x = identity_block_5d(x, 3, [512, 512, 2048], stage=5, block='c')
-    # 全局平均池化(batch_size,roi_num,channels)
-    shared_layer = layers.TimeDistributed(layers.GlobalAvgPool2D())(x)
-    # 用卷积来实现两个全连接
-    # x = TimeDistributed(Conv2D(fc_layers_size, pool_size, padding='valid'), name='rcnn_fc1')(
-    #     x)  # 变为(batch_size,roi_num,1,1,channels)
-    # x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn1')(x)
-    # x = layers.Activation(activation='relu')(x)
-    # x = layers.Dropout(rate=0.5, name='drop_fc6')(x)
-    #
-    # x = TimeDistributed(Conv2D(fc_layers_size, (1, 1), padding='valid'), name='rcnn_fc2')(x)
-    # x = TimeDistributed(layers.BatchNormalization(), name='rcnn_class_bn2')(x)
-    # x = layers.Activation(activation='relu')(x)
-    # x = layers.Dropout(rate=0.5, name='drop_fc7')(x)
-
+    x = RoiAlign(image_max_dim, pool_size=pool_size)([base_layers, rois])  #
     # 收缩维度
-    # shared_layer = layers.Lambda(lambda a: tf.squeeze(tf.squeeze(a, 3), 2))(x)  # 变为(batch_size,roi_num,channels)
-
+    shared_layer = head_fn(x)
     # 分类
     class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear'), name='rcnn_class_logits')(
         shared_layer)
