@@ -65,7 +65,7 @@ def nms(boxes, scores, class_logits, anchors_tag, max_output_size, iou_threshold
     scores = tf.gather(scores, valid_anchor_indices)
     class_logits = tf.gather(class_logits, valid_anchor_indices)
     # 取top 6000个rois
-    pre_nms_limit = tf.minimum(6000, tf.shape(scores)[0])
+    pre_nms_limit = tf.minimum(12000, tf.shape(scores)[0])
     ix = tf.nn.top_k(scores, pre_nms_limit, sorted=True,
                      name="top_anchors").indices
     scores = tf.gather(scores, ix)

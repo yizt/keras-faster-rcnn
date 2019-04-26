@@ -25,8 +25,8 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     true_cls_ids = tf.gather_nd(true_cls_ids[..., 0], train_indices)  # 一维(batch*train_num,)
     # 转为onehot编码
     true_cls_ids = tf.where(true_cls_ids >= 1,
-                            tf.ones_like(true_cls_ids, dtype=tf.uint8),
-                            tf.zeros_like(true_cls_ids, dtype=tf.uint8))  # 前景类都为1
+                            tf.ones_like(true_cls_ids, dtype=tf.int32),
+                            tf.zeros_like(true_cls_ids, dtype=tf.int32))  # 前景类都为1
     true_cls_ids = tf.one_hot(true_cls_ids, depth=2)
     # batch索引
     batch_indices = train_indices[:, 0]  # 训练的第一维是batch索引

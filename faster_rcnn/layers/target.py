@@ -145,7 +145,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
     # 负样本,保证负样本不超过一半
     negative_num = tf.minimum(rpn_train_anchors - positive_num,
                               tf.shape(negative_indices)[0], name='rpn_target_negative_num')
-    negative_num = tf.minimum(int(rpn_train_anchors * 0.5), negative_num, name='rpn_target_negative_num_2')
+    # negative_num = tf.minimum(int(rpn_train_anchors * 0.5), negative_num, name='rpn_target_negative_num_2')
     negative_indices = tf.random_shuffle(negative_indices)[:negative_num]
     negative_gt_cls = tf.zeros([negative_num])  # 负样本类别id为0
     negative_deltas = tf.zeros([negative_num, 4])
@@ -156,7 +156,7 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
     indices = tf.concat([positive_anchor_indices, negative_indices[:, 0]], axis=0, name='rpn_train_anchor_indices')
 
     # indices转换会原始的anchors索引
-    indices = tf.gather(valid_anchor_indices, indices, name='map_to_orgin_anchor_indices')
+    indices = tf.gather(valid_anchor_indices, indices, name='map_to_origin_anchor_indices')
     # 计算padding
     deltas, class_ids = tf_utils.pad_list_to_fixed_size([deltas, tf.expand_dims(class_ids, 1)],
                                                         rpn_train_anchors)
@@ -166,14 +166,14 @@ def rpn_targets_graph(gt_boxes, gt_cls, anchors, anchors_tag, rpn_train_anchors=
     # 其它统计指标
     gt_num = tf.shape(gt_cls)[0]  # GT数
     miss_match_gt_num = gt_num - tf.shape(tf.unique(positive_gt_indices)[0])[0]  # 未分配anchor的GT
-    gt_match_min_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # GT匹配anchor最小的IoU
+    rpn_gt_min_max_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # GT匹配anchor最小的IoU
 
     return [deltas, class_ids, indices,
             tf_utils.scalar_to_1d_tensor(gt_num),
             tf_utils.scalar_to_1d_tensor(positive_num),
             tf_utils.scalar_to_1d_tensor(negative_num),
             tf_utils.scalar_to_1d_tensor(miss_match_gt_num),
-            tf_utils.scalar_to_1d_tensor(gt_match_min_iou)]
+            tf_utils.scalar_to_1d_tensor(rpn_gt_min_max_iou)]
 
 
 class RpnTarget(keras.layers.Layer):
@@ -264,15 +264,18 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
                                                tf.greater_equal(iou, 0.5)))
     gt_pos_idx = positive_indices[:, 0]  # 第一维gt索引
     proposal_pos_idx = positive_indices[:, 1]  # 第二位rois索引
+    match_gt_num = tf.shape(tf.unique(gt_pos_idx)[0])[0]  # shuffle 前匹配的gt num
 
     gt_boxes_pos = tf.gather(gt_boxes, gt_pos_idx)
     class_ids = tf.gather(gt_class_ids, gt_pos_idx)
     proposal_pos = tf.gather(proposals, proposal_pos_idx)
     # 根据正负样本比确定最终的正样本
     positive_num = tf.minimum(tf.shape(proposal_pos)[0], int(train_rois_per_image * roi_positive_ratio))
-    gt_boxes_pos, class_ids, proposal_pos = shuffle_sample([gt_boxes_pos, class_ids, proposal_pos],
-                                                           tf.shape(proposal_pos)[0],
-                                                           positive_num)
+    gt_boxes_pos, class_ids, proposal_pos, gt_pos_idx = shuffle_sample(
+        [gt_boxes_pos, class_ids, proposal_pos, gt_pos_idx],
+        tf.shape(proposal_pos)[0],
+        positive_num)
+    match_gt_num_after_shuffle = tf.shape(tf.unique(gt_pos_idx)[0])[0]  # shuffle 后匹配的gt num
 
     # 计算回归目标
     deltas = regress_target(proposal_pos, gt_boxes_pos)
@@ -304,9 +307,13 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     deltas = tf_utils.pad_to_fixed_size_with_negative(deltas, train_rois_per_image, negative_num=negative_num)
     # 其它统计指标
     gt_num = tf.shape(gt_class_ids)[0]  # GT数
-    miss_match_gt_num = gt_num - tf.shape(tf.unique(gt_pos_idx)[0])[0]  # 未分配anchor的GT
+    miss_gt_num = gt_num - match_gt_num
+    miss_gt_num_shuffle = gt_num - match_gt_num_after_shuffle  # shuffle后未分配roi的GT
+    gt_min_max_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # gt 匹配最小最大值
     return [deltas, class_ids, train_rois,
-            tf_utils.scalar_to_1d_tensor(miss_match_gt_num),
+            tf_utils.scalar_to_1d_tensor(miss_gt_num),
+            tf_utils.scalar_to_1d_tensor(miss_gt_num_shuffle),
+            tf_utils.scalar_to_1d_tensor(gt_min_max_iou),
             tf_utils.scalar_to_1d_tensor(positive_num),
             tf_utils.scalar_to_1d_tensor(proposals_num)]
 
@@ -353,6 +360,8 @@ class DetectTarget(keras.layers.Layer):
                 (input_shape[0][0], self.train_rois_per_image, 1 + 1),  # class_ids
                 (input_shape[0][0], self.train_rois_per_image, 4 + 1),
                 (input_shape[0][0], 1),  # miss_match_gt_num
+                (input_shape[0][0], 1),  # miss_match_gt_num after shuffle
+                (input_shape[0][0], 1),  # gt_min_max_iou
                 (input_shape[0][0], 1),  # positive_roi_num
                 (input_shape[0][0], 1)]  # roi_num
 

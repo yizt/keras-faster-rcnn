@@ -23,7 +23,6 @@ from faster_rcnn.layers.clip_boxes import ClipBoxes, UniqueClipBoxes
 from faster_rcnn.layers.base_net import resnet50
 from faster_rcnn.utils.parallel_model import ParallelModel
 from faster_rcnn.utils.utils import log
-from faster_rcnn.layers.base_net import conv_block_5d, identity_block_5d
 
 
 def rpn_net(config, stage='train'):
@@ -127,7 +126,8 @@ def frcnn(config, stage='train'):
                                       config.TRAIN_ROIS_PER_IMAGE,
                                       config.ROI_POSITIVE_RATIO,
                                       name='rcnn_target')([gt_boxes, gt_class_ids, proposal_boxes])
-        roi_deltas, roi_class_ids, train_rois, rcnn_miss_gt_num, pos_roi_num, roi_num = detect_targets
+        roi_deltas, roi_class_ids, train_rois = detect_targets[:3]
+
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
                                               config.head_fn, pool_size=config.POOL_SIZE,
@@ -139,21 +139,25 @@ def frcnn(config, stage='train'):
         cls_loss_rcnn = Lambda(lambda x: detect_cls_loss(*x), name='rcnn_class_loss')(
             [rcnn_class_logits, roi_class_ids])
         # 自定义度量命名
-        gt_num, positive_num, negative_num, rpn_miss_gt_num, gt_match_min_iou = rpn_targets[3:]
+        gt_num, positive_num, negative_num, rpn_miss_gt_num, rpn_gt_min_max_iou = rpn_targets[3:]
+        rcnn_miss_gt_num, rcnn_miss_gt_num_as, gt_min_max_iou, pos_roi_num, roi_num = detect_targets[3:]
         gt_num = Lambda(lambda x: tf.identity(x), name='identity_gt_num')(gt_num)
         positive_num = Lambda(lambda x: tf.identity(x), name='identity_positive_num')(positive_num)
         negative_num = Lambda(lambda x: tf.identity(x), name='identity_negative_num')(negative_num)
         rpn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rpn_miss_gt_num')(rpn_miss_gt_num)
-        gt_match_min_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_match_min_iou')(gt_match_min_iou)
+        rpn_gt_min_max_iou = Lambda(lambda x: tf.identity(x), name='identity_rpn_gt_min_max_iou')(rpn_gt_min_max_iou)
         rcnn_miss_gt_num = Lambda(lambda x: tf.identity(x), name='identity_rcnn_miss_gt_num')(rcnn_miss_gt_num)
+        rcnn_miss_gt_num_as = Lambda(lambda x: tf.identity(x), name='identity_rcnn_miss_gt_num_as')(rcnn_miss_gt_num_as)
+        gt_min_max_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_min_max_iou')(gt_min_max_iou)
         pos_roi_num = Lambda(lambda x: tf.identity(x), name='identity_pos_roi_num')(pos_roi_num)
         roi_num = Lambda(lambda x: tf.identity(x), name='identity_roi_num')(roi_num)
 
         # 构建模型
         model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
                       outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn] + [
-                          gt_num, positive_num, negative_num, rpn_miss_gt_num, gt_match_min_iou, roi_num,
-                          pos_roi_num, rcnn_miss_gt_num])  # 在并行model中所有自定义度量必须在output中
+                          gt_num, positive_num, negative_num, rpn_miss_gt_num, rpn_gt_min_max_iou, roi_num,
+                          pos_roi_num, rcnn_miss_gt_num, rcnn_miss_gt_num_as,
+                          gt_min_max_iou])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
         if config.GPU_COUNT > 1:
             model = ParallelModel(model, config.GPU_COUNT)

@@ -45,7 +45,7 @@ layer_regex = {
 def lr_schedule(epoch):
     if epoch < 80:
         return config.LEARNING_RATE
-    elif epoch < 100:
+    elif epoch < 160:
         return config.LEARNING_RATE / 10.
     else:
         return 1e-4
@@ -106,8 +106,9 @@ def main(args):
     m.summary()
     # 增加个性化度量
     metric_names = ['gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
-                    'gt_match_min_iou', 'roi_num', 'positive_roi_num', 'rcnn_miss_gt_num']
-    model_utils.add_metrics(m, metric_names, m.outputs[-8:])
+                    'rpn_gt_min_max_iou', 'roi_num', 'positive_roi_num',
+                    'rcnn_miss_gt_num', 'rcnn_miss_gt_num_as', 'gt_min_max_iou']
+    model_utils.add_metrics(m, metric_names, m.outputs[-10:])
 
     # 训练
     m.fit_generator(train_gen.gen(),
@@ -123,7 +124,7 @@ def main(args):
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument("--epochs", type=int, default=120, help="epochs")
+    parse.add_argument("--epochs", type=int, default=200, help="epochs")
     parse.add_argument("--init_epochs", type=int, default=0, help="init_epochs")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)
