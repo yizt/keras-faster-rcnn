@@ -42,15 +42,17 @@ def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
     return losses
 
 
-def smooth_l1_loss(y_true, y_predict):
+def smooth_l1_loss(y_true, y_predict, sigma=1.):
     """
-    smooth L1损失函数；   0.5*x^2 if |x| <1 else |x|-0.5; x是 diff
+    smooth L1损失函数；   0.5*sigma^2*x^2 if |x| <1/sigma^2 else |x|-0.5/sigma^2; x是 diff
     :param y_true:[N,4]
     :param y_predict:[N,4]
+    :param sigma
     :return:
     """
+    sigma_2 = sigma ** 2
     abs_diff = tf.abs(y_true - y_predict, name='abs_diff')
-    loss = tf.where(tf.less(abs_diff, 1), 0.5 * tf.pow(abs_diff, 2), abs_diff - 0.5)
+    loss = tf.where(tf.less(abs_diff, 1. / sigma_2), 0.5 * sigma_2 * tf.pow(abs_diff, 2), abs_diff - 0.5 / sigma_2)
     return loss
 
 
@@ -77,7 +79,7 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
 
     # Smooth-L1 # 非常重要，不然报NAN
     loss = K.switch(tf.size(deltas) > 0,
-                    smooth_l1_loss(deltas, predict_deltas),
+                    smooth_l1_loss(deltas, predict_deltas, 3.),
                     tf.constant(0.0))
     loss = K.mean(loss)
     return loss
