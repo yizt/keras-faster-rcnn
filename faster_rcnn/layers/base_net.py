@@ -8,6 +8,7 @@ Created on 2019/3/24 下午9:51
 """
 from keras import layers, backend, Model
 from keras.layers import TimeDistributed, Conv2D
+from faster_rcnn.layers.batch_norm import BatchNorm
 
 
 def resnet50(inputs):
@@ -18,7 +19,7 @@ def resnet50(inputs):
                       strides=(2, 2),
                       padding='valid',
                       name='conv1')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name='bn_conv1')(x)
+    x = BatchNorm(axis=bn_axis, name='bn_conv1')(x)
     x = layers.Activation('relu')(x)
     x = layers.MaxPooling2D((3, 3), strides=(2, 2))(x)
 
@@ -172,20 +173,20 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = layers.Conv2D(filters1, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2a')(input_tensor)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters2, kernel_size,
                       padding='same',
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2b')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2c')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2c')(x)
 
     x = layers.add([x, input_tensor])
     x = layers.Activation('relu')(x)
@@ -227,24 +228,24 @@ def conv_block(input_tensor,
     x = layers.Conv2D(filters1, (1, 1), strides=strides,
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2a')(input_tensor)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2a')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters2, kernel_size, padding='same',
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2b')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2b')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
                       name=conv_name_base + '2c')(x)
-    x = layers.BatchNormalization(axis=bn_axis, name=bn_name_base + '2c')(x)
+    x = BatchNorm(axis=bn_axis, name=bn_name_base + '2c')(x)
 
     shortcut = layers.Conv2D(filters3, (1, 1), strides=strides,
                              kernel_initializer='he_normal',
                              name=conv_name_base + '1')(input_tensor)
-    shortcut = layers.BatchNormalization(
+    shortcut = BatchNorm(
         axis=bn_axis, name=bn_name_base + '1')(shortcut)
 
     x = layers.add([x, shortcut])
@@ -274,20 +275,20 @@ def identity_block_5d(input_tensor, kernel_size, filters, stage, block):
     x = layers.TimeDistributed(layers.Conv2D(filters1, (1, 1),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2a')(input_tensor)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=-1), name=bn_name_base + '2a')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=-1), name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters2, kernel_size,
                                              padding='same',
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2b')(x)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=bn_axis), name=bn_name_base + '2b')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2c')(x)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=bn_axis), name=bn_name_base + '2c')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2c')(x)
 
     x = layers.add([x, input_tensor])
     x = layers.Activation('relu')(x)
@@ -326,24 +327,24 @@ def conv_block_5d(input_tensor,
     x = layers.TimeDistributed(layers.Conv2D(filters1, (1, 1), strides=strides,
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2a')(input_tensor)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=bn_axis), name=bn_name_base + '2a')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters2, kernel_size, padding='same',
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2b')(x)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=bn_axis), name=bn_name_base + '2b')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2c')(x)
-    x = layers.TimeDistributed(layers.BatchNormalization(axis=bn_axis), name=bn_name_base + '2c')(x)
+    x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2c')(x)
 
     shortcut = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1), strides=strides,
                                                     kernel_initializer='he_normal'),
                                       name=conv_name_base + '1')(input_tensor)
-    shortcut = layers.TimeDistributed(layers.BatchNormalization(
+    shortcut = layers.TimeDistributed(BatchNorm(
         axis=bn_axis), name=bn_name_base + '1')(shortcut)
 
     x = layers.add([x, shortcut])
