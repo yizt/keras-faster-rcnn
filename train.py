@@ -29,23 +29,10 @@ def set_gpu_growth(gpu_count):
     keras.backend.set_session(session)
 
 
-# 层名匹配
-layer_regex = {
-    # 网络头
-    "heads": r"base_features|(rcnn\_.*)|(rpn\_.*)",
-    # 指定的阶段开始
-    "3+": r"base_features|(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)",
-    "4+": r"base_features|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)",
-    "5+": r"base_features|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)|",
-    # 所有层
-    "all": ".*",
-}
-
-
 def lr_schedule(epoch):
-    if epoch < 80:
+    if epoch < 20:
         return config.LEARNING_RATE
-    elif epoch < 160:
+    elif epoch < 60:
         return config.LEARNING_RATE / 10.
     else:
         return 1e-4
@@ -57,11 +44,11 @@ def get_call_back():
     :return:
     """
     checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + config.BASE_NET_NAME + '.{epoch:03d}.h5',
-                                 monitor='acc',
+                                 monitor='val_loss',
                                  verbose=1,
-                                 save_best_only=False,
+                                 save_best_only=True,
                                  save_weights_only=True,
-                                 period=5)
+                                 period=1)
 
     scheduler = LearningRateScheduler(lr_schedule)
 
@@ -117,14 +104,14 @@ def main(args):
                     verbose=1,
                     initial_epoch=init_epochs,
                     validation_data=val_gen.gen(),
-                    validation_steps=5,  # 小一点，不影响训练速度太多
+                    validation_steps=len(test_img_info) // config.BATCH_SIZE,  
                     use_multiprocessing=True,
                     callbacks=get_call_back())
 
 
 if __name__ == '__main__':
     parse = argparse.ArgumentParser()
-    parse.add_argument("--epochs", type=int, default=200, help="epochs")
+    parse.add_argument("--epochs", type=int, default=80, help="epochs")
     parse.add_argument("--init_epochs", type=int, default=0, help="init_epochs")
     argments = parse.parse_args(sys.argv[1:])
     main(argments)

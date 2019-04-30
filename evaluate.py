@@ -18,10 +18,11 @@ from faster_rcnn.utils.generator import Generator
 
 
 def main(args):
-    os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+    os.environ["CUDA_VISIBLE_DEVICES"] = config.INFERENCE_GPU_ID
     # 覆盖参数
     config.IMAGES_PER_GPU = 1
     config.GPU_COUNT = 1
+    config.DETECTION_MIN_CONFIDENCE = 0.0  # 评估阶段保证有足够的边框输出
     # 加载数据集
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()

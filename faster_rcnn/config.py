@@ -34,6 +34,8 @@ class Config(object):
     # 训练和预测阶段NMS后保留的ROIs数
     POST_NMS_ROIS_TRAINING = 2000
     POST_NMS_ROIS_INFERENCE = 1000
+    # proposals最小尺寸(在原始图像上),小于这个尺寸的丢弃
+    RPN_MIN_SIZE = 16
 
     # 检测网络训练rois数和正样本比
     TRAIN_ROIS_PER_IMAGE = 128
@@ -76,6 +78,8 @@ class Config(object):
     USE_HORIZONTAL_FLIP = False
     USE_RANDOM_CROP = False
 
+    INFERENCE_GPU_ID = '1'  # 预测的gpu id
+
     def __init__(self):
         self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT  # batch_size是GPU数乘每个gpu处理图片数
         self.IMAGE_INPUT_SHAPE = (self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3)
@@ -94,6 +98,7 @@ class Config(object):
 
 class VOCConfig(Config):
     NUM_CLASSES = 1 + 20  #
+    POST_NMS_ROIS_INFERENCE = 300
     CLASS_MAPPING = {'bg': 0,
                      'train': 1,
                      'dog': 2,
@@ -122,18 +127,17 @@ class VOCConfig(Config):
 
 class VOCVggConfig(VOCConfig):
     NAME = "voc"
-    GPU_COUNT = 2
+    GPU_COUNT = 1
     IMAGES_PER_GPU = 2
     IMAGE_MAX_DIM = 1024
     RPN_ANCHOR_BASE_SIZE = 128
     LEARNING_RATE = 0.003
     # RPN_TRAIN_ANCHORS_PER_IMAGE = 80
-    RPN_NMS_THRESHOLD_TRAINING = 0.8  # 增加训练时rcnn网络正样本数量
-    POST_NMS_ROIS_INFERENCE = 300  # 加快预测速度
 
     USE_HORIZONTAL_FLIP = True
+    USE_RANDOM_CROP = True
     TRAIN_LAYERS = r"(block3.*)|(block4.*)|(block5.*)|(fc.*)|(rcnn\_.*)|(rpn\_.*)"
-    # USE_RANDOM_CROP = True
+    # TRAIN_LAYERS = r"(fc.*)|(rcnn\_.*)|(rpn\_.*)"
     pretrained_weights = '/opt/pretrained_model/vgg16_weights_tf_dim_ordering_tf_kernels.h5'
 
 
@@ -145,9 +149,8 @@ class VOCResnetConfig(VOCConfig):
     IMAGE_MAX_DIM = 720
     LEARNING_RATE = 0.003
     TRAIN_LAYERS = r"(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)"
+    # TRAIN_LAYERS = r"(bn5.*)|(res3.*)|(res4.*)|(res5.*)|(rcnn\_.*)|(rpn\_.*)"
     # RPN_TRAIN_ANCHORS_PER_IMAGE = 80
-    RPN_NMS_THRESHOLD_TRAINING = 0.8  # 增加训练时rcnn网络正样本数量
-    POST_NMS_ROIS_INFERENCE = 300  # 加快预测速度
     POOL_SIZE = (14, 14)
 
     # RPN_ANCHOR_HEIGHTS = [76.01, 137.64, 210.27, 249.25, 350.94, 386.97, 546.33, 631.71, 707.87]
@@ -156,7 +159,7 @@ class VOCResnetConfig(VOCConfig):
     RPN_ANCHOR_WIDTHS = [40.85, 132.84, 66.24, 294.26, 135.53, 533.3, 190.26, 339.55, 591.88]
 
     USE_HORIZONTAL_FLIP = True
-    # USE_RANDOM_CROP = True
+    USE_RANDOM_CROP = True
 
     BASE_NET_NAME = 'resnet50'
 
