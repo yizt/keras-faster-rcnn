@@ -120,6 +120,7 @@ mAP:0.532840809601616
 
 ## 自定义度量
 
+
 1. gt_num：图像的GT 个数
 2. positive_anchor_num：rpn网络实际训练正样本anchor数
 3. negative_anchor_num：rpn网络实际训练负样本anchor数
