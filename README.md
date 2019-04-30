@@ -2,19 +2,27 @@
 
 keras 复现论文 [Faster R-CNN: Towards Real-Time Object Detection with Region Proposal Networks](https://arxiv.org/pdf/1504.08083.pdf) ;主要参考了工程[Mask RCNN](https://github.com/matterport/Mask_RCNN); 给出了在Pascal VOC目标检测数据集上的训练和测试过程;
 
-**关键点说明**:
+1. [关键点说明](#关键点说明)
+2. [依赖](#依赖)
+3. [训练](#训练)
+4. [预测](#预测)
+5. [评估](#评估)
+6. [自定义度量](#自定义度量)
+7. [toDoList](#toDoList)
+8. [总结](#总结)
 
-a.骨干网络使用的是resnet50
+## 关键点说明:
+
+a.骨干网络使用的是resnet50;Conv1~4用于提取特征;Conv5用于rcnn分类
 
 b.训练输入图像大小为720*720; 将图像的长边缩放到720,保持长宽比,短边padding;原文是短边600;长边1000
 
-c.不同于源工程，所有的层都是使用的Keras Layer 包括anchors、rpn网络的target、roi2proposals等
+c.不同于源工程，所有的层都是使用的Keras Layer 包括anchors、rpn网络的target、roi2proposals、detect boxes等
 
-d.为了更好的诊断网络增加了10个自定义度量，如：gt数量，rpn网络匹配的gt数，实际训练的正样本数等
+d.为了更好的诊断网络增加了10个自定义度量，如：gt数量，rpn网络匹配的gt数，实际训练的正anchor数等
 
+e.anchor尺寸参考yolo使用聚类得到
 
-
-[TOC]
 
 ## 依赖
 
@@ -23,19 +31,8 @@ Keras 2.2.4
 tensorflow-gpu 1.9.0
 
 
-## 预测
 
-
-
-执行如下命令即可
-
-```shell
-python inference.py
-```
-
-
-
-## 训练网络
+## 训练
 
 a) 下载工程
 
@@ -86,6 +83,24 @@ f) end2end方式训练网络
 python train.py
 ```
 
+## 预测
+
+a) 预训练模型下载
+
+​    PASCAL VOC 2007训练集上训练好的模型下载地址： [frcnn-resnet50.100.h5](https://drive.google.com/file/d/1HEU0BFkU4l31DsHh-47XkjbiZaNEShAV/view?usp=sharing)
+
+
+b) 执行如下命令即可
+
+```shell
+python inference.py --weight_path /tmp/frcnn-resnet50.100.h5
+```
+
+样例结果如下;更多预测样例见demo_images目录
+
+![examples](demo_images/inferece_examples.2.png)
+
+
 ## 评估
 
 执行如下命令即可
@@ -103,10 +118,21 @@ mAP:0.532840809601616
 整个评估过程耗时：826.3198778629303 秒
 ```
 
+## 自定义度量
 
-样例结果如下;更多预测样例见demo_images目录
-
-![examples](demo_images/inferece_examples.2.png)
+'gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
+                    'rpn_gt_min_max_iou', 'roi_num', 'positive_roi_num',
+                    'rcnn_miss_gt_num', 'rcnn_miss_gt_num_as', 'gt_min_max_iou'
+1. gt_num：图像的GT 个数
+2. positive_anchor_num：rpn网络实际训练正样本anchor数
+3. negative_anchor_num：rpn网络实际训练负样本anchor数
+4. rpn_miss_gt_num：rpn网络没有匹配anchor的GT数
+5. rpn_gt_min_max_iou：设max_iou为每个GT匹配的anchor最大IoU;rpn_gt_min_max_iou是每个mini-batch中max_iou的最小值;用于衡量anchor长宽尺寸和个数设置是否合理
+6. roi_num：经过proposal层nms后实际喂入rcnn网络的proposal个数
+7. positive_roi_num：每张图像rcnn网络实际训练的正样本数
+8. rcnn_miss_gt_num：rcnn网络按照0.5的iou阈值匹配，有多少个GT没有匹配到proposals；
+9. rcnn_miss_gt_num_as：在经过正样本比例(0.25)限制后, 有多少个GT没有匹配到proposals；
+10. gt_min_max_iou: 设max_iou为每个GT匹配的proposals最大IoU;gt_min_max_iou是每个mini-batch中max_iou的最小值;用于衡量rpn网络对于边框位置的改善程度                  
 
 
 ## toDoList
@@ -117,7 +143,8 @@ mAP:0.532840809601616
 4. GT boxes信息加载部分重构(已完成)
 5. 不同输入尺寸大小精度比较
 6. indices类型改为tf.int64;float32类型转换可能丢失精度(已完成)
+7. 使用聚类GT boxes设计anchors长宽尺寸(已完成)
 
 
 ## 总结
-1. 裁剪到输入比裁剪到窗口效果好
+1. 精度还是与原文相差较大
