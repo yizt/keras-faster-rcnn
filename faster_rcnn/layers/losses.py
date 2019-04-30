@@ -79,7 +79,7 @@ def rpn_regress_loss(predict_deltas, deltas, indices):
 
     # Smooth-L1 # 非常重要，不然报NAN
     loss = K.switch(tf.size(deltas) > 0,
-                    smooth_l1_loss(deltas, predict_deltas, 3.),
+                    smooth_l1_loss(deltas, predict_deltas),
                     tf.constant(0.0))
     loss = K.mean(loss)
     return loss

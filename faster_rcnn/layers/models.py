@@ -101,14 +101,15 @@ def frcnn(config, stage='train'):
     iou_threshold = config.RPN_NMS_THRESHOLD_TRAINING if stage == 'train' else config.RPN_NMS_THRESHOLD_INFERENCE
     proposal_boxes, _, _ = RpnToProposal(batch_size, output_box_num=output_box_num,
                                          iou_threshold=iou_threshold,
-                                         name='rpn2proposals')([boxes_regress, class_logits, anchors, anchors_tag])
+                                         name='rpn2proposals')(
+        [boxes_regress, class_logits, anchors, anchors_tag, input_image_meta])
     # proposal裁剪到图像窗口内
-    proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
+    # proposal_boxes_coordinate, proposal_boxes_tag = Lambda(lambda x: [x[..., :4], x[..., 4:]])(proposal_boxes)
     # proposal_boxes_coordinate = ClipBoxes()([proposal_boxes_coordinate, windows])
-    proposal_boxes_coordinate = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE,
-                                                name='clip_proposals')(proposal_boxes_coordinate)
+    # proposal_boxes_coordinate = UniqueClipBoxes(config.IMAGE_INPUT_SHAPE,
+    #                                             name='clip_proposals')(proposal_boxes_coordinate)
     # 最后再合并tag返回
-    proposal_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([proposal_boxes_coordinate, proposal_boxes_tag])
+    # proposal_boxes = Lambda(lambda x: tf.concat(x, axis=-1))([proposal_boxes_coordinate, proposal_boxes_tag])
 
     if stage == 'train':
         # 生成分类和回归目标

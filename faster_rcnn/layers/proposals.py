@@ -46,21 +46,28 @@ def apply_regress(deltas, anchors):
     return tf.stack([y1, x1, y2, x2], axis=1)
 
 
-def nms(boxes, scores, class_logits, anchors_tag, max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
+def nms(boxes, scores, class_logits, anchors_tag, scale,
+        max_output_size, iou_threshold=0.5, score_threshold=0.05, name=None):
     """
     非极大抑制
     :param boxes: 形状为[num_boxes, 4]的二维浮点型Tensor.
     :param scores: 形状为[num_boxes]的一维浮点型Tensor,表示与每个框(每行框)对应的单个分数.
     :param class_logits: 形状为[num_boxes,num_classes] 原始的预测类别
     :param anchors_tag: anchor tag[N]
+    :param anchors_tag: image scale 标量
     :param max_output_size: 一个标量整数Tensor,表示通过非最大抑制选择的框的最大数量.
     :param iou_threshold: 浮点数,IOU 阈值
     :param score_threshold:  浮点数, 过滤低于阈值的边框
     :param name:
     :return: 检测边框、边框得分、边框类别
     """
-    # 获取有效的anchors和对应的scores,class_logits
-    valid_anchor_indices = tf.where(anchors_tag)[:, 0]  # [valid_anchors_num]
+    # 过滤元素图像上长宽小于16的proposals,且有效的anchors和对应的scores,class_logits
+    rois_width = (boxes[:, 3] - boxes[:, 1]) / scale
+    rois_height = (boxes[:, 2] - boxes[:, 0]) / scale
+    valid_size_tag = tf.logical_and(tf.greater_equal(rois_width, 16),
+                                    tf.greater_equal(rois_height, 16))
+    valid_anchor_indices = tf.where(tf.logical_and(anchors_tag,
+                                                   valid_size_tag))[:, 0]  # 有效anchor[valid_anchors_num]
     boxes = tf.gather(boxes, valid_anchor_indices)
     scores = tf.gather(scores, valid_anchor_indices)
     class_logits = tf.gather(class_logits, valid_anchor_indices)
@@ -107,15 +114,12 @@ class RpnToProposal(keras.layers.Layer):
         inputs[0]: deltas, [batch_size,N,(dy,dx,dh,dw)]   N是所有的anchors数量
         inputs[1]: class logits [batch_size,N,num_classes]
         inputs[2]: anchors [batch_size,N,(y1,x1,y2,x2)]
-        inputs[3]: Anchors是否有效 bool类型 [batch_size, N]
+        inputs[3]: anchors是否有效 bool类型 [batch_size, N]
+        inputs[4]: image metas是否有效 bool类型 [batch_size, 12]
         :param kwargs:
         :return:
         """
-        deltas = inputs[0]
-        class_logits = inputs[1]
-        anchors = inputs[2]
-        anchors_tag = inputs[3]
-        # 有效的anchors
+        deltas, class_logits, anchors, anchors_tag, metas = inputs
 
         # 转为分类评分
         class_scores = tf.nn.softmax(logits=class_logits, axis=-1)  # [N,num_classes]
@@ -134,16 +138,23 @@ class RpnToProposal(keras.layers.Layer):
         # outputs = tf.map_fn(lambda x: nms(*x, **options),
         #                     elems=[proposals, fg_scores, class_logits],
         #                     dtype=[tf.float32] * 3)
-        # # 非极大抑制
+        # 应用边框回归
         proposals = tf_utils.batch_slice([deltas, anchors],
                                          lambda x, y: apply_regress(x, y),
                                          self.batch_size)
+        # 裁剪边框到图像窗口内
+        windows = metas[:, 7:11]
+        proposals = tf_utils.batch_slice([proposals, windows],
+                                         lambda x, y: tf_utils.clip_boxes(x, y),
+                                         self.batch_size)
 
-        outputs = tf_utils.batch_slice([proposals, fg_scores, class_logits, anchors_tag],
-                                       lambda x, y, z, t: nms(x, y, z, t,
-                                                              max_output_size=self.output_box_num,
-                                                              iou_threshold=self.iou_threshold,
-                                                              score_threshold=self.score_threshold),
+        # 非极大抑制
+        scales = metas[:, -1]
+        outputs = tf_utils.batch_slice([proposals, fg_scores, class_logits, anchors_tag, scales],
+                                       lambda x, y, z, r, t: nms(x, y, z, r, t,
+                                                                 max_output_size=self.output_box_num,
+                                                                 iou_threshold=self.iou_threshold,
+                                                                 score_threshold=self.score_threshold),
                                        self.batch_size)
         return outputs
 
