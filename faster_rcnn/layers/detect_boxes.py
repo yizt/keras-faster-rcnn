@@ -22,8 +22,8 @@ def detect_boxes(boxes, class_logits, max_output_size, iou_threshold=0.5, score_
     :return: 检测边框、边框得分、边框类别、预测的logits
     """
     # 类别得分和预测类别
-    class_scores = tf.reduce_max(tf.nn.softmax(class_logits, axis=-1), axis=-1)  # [num_boxes]
-    class_ids = tf.argmax(class_logits, axis=-1)  # [num_boxes]
+    class_scores = tf.reduce_max(tf.nn.softmax(class_logits, axis=-1)[:, 1:], axis=-1)  # [num_boxes]
+    class_ids = tf.argmax(class_logits[:, 1:], axis=-1) + 1  # [num_boxes]
     # 过滤背景类别0
     keep = tf.where(class_ids > 0)  # 保留的索引号
     keep_class_scores = tf.gather_nd(class_scores, keep)
