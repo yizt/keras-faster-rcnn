@@ -61,7 +61,7 @@ def main(args):
                                     id_mapping,
                                     scores=scores[:5],
                                     ax=ax)
-        print("boxes num:{}".format(boxes.shape[0]))
+        # print("boxes num:{}".format(boxes.shape[0]))
 
     # 随机展示9张图像
     image_ids = np.random.choice(len(all_img_info), 9, replace=False)

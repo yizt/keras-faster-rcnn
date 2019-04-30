@@ -48,7 +48,7 @@ def get_call_back():
                                  verbose=1,
                                  save_best_only=True,
                                  save_weights_only=True,
-                                 period=1)
+                                 period=5)
 
     scheduler = LearningRateScheduler(lr_schedule)
 
