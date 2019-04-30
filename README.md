@@ -120,9 +120,6 @@ mAP:0.532840809601616
 
 ## 自定义度量
 
-'gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
-                    'rpn_gt_min_max_iou', 'roi_num', 'positive_roi_num',
-                    'rcnn_miss_gt_num', 'rcnn_miss_gt_num_as', 'gt_min_max_iou'
 1. gt_num：图像的GT 个数
 2. positive_anchor_num：rpn网络实际训练正样本anchor数
 3. negative_anchor_num：rpn网络实际训练负样本anchor数
