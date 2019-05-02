@@ -315,6 +315,7 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
             tf_utils.scalar_to_1d_tensor(miss_gt_num_shuffle),
             tf_utils.scalar_to_1d_tensor(gt_min_max_iou),
             tf_utils.scalar_to_1d_tensor(positive_num),
+            tf_utils.scalar_to_1d_tensor(negative_num),
             tf_utils.scalar_to_1d_tensor(proposals_num)]
 
 
@@ -363,6 +364,7 @@ class DetectTarget(keras.layers.Layer):
                 (input_shape[0][0], 1),  # miss_match_gt_num after shuffle
                 (input_shape[0][0], 1),  # gt_min_max_iou
                 (input_shape[0][0], 1),  # positive_roi_num
+                (input_shape[0][0], 1),  # negative_roi_num
                 (input_shape[0][0], 1)]  # roi_num
 
 

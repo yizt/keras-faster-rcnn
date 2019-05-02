@@ -93,9 +93,9 @@ def main(args):
     m.summary()
     # 增加个性化度量
     metric_names = ['gt_num', 'positive_anchor_num', 'negative_anchor_num', 'rpn_miss_gt_num',
-                    'rpn_gt_min_max_iou', 'roi_num', 'positive_roi_num',
+                    'rpn_gt_min_max_iou', 'roi_num', 'positive_roi_num', 'negative_roi_num',
                     'rcnn_miss_gt_num', 'rcnn_miss_gt_num_as', 'gt_min_max_iou']
-    model_utils.add_metrics(m, metric_names, m.outputs[-10:])
+    model_utils.add_metrics(m, metric_names, m.outputs[-11:])
 
     # 训练
     m.fit_generator(train_gen.gen(),
@@ -104,7 +104,7 @@ def main(args):
                     verbose=1,
                     initial_epoch=init_epochs,
                     validation_data=val_gen.gen(),
-                    validation_steps=len(test_img_info) // config.BATCH_SIZE,  
+                    validation_steps=len(test_img_info) // config.BATCH_SIZE,
                     use_multiprocessing=True,
                     callbacks=get_call_back())
 

@@ -141,7 +141,7 @@ def frcnn(config, stage='train'):
             [rcnn_class_logits, roi_class_ids])
         # 自定义度量命名
         gt_num, positive_num, negative_num, rpn_miss_gt_num, rpn_gt_min_max_iou = rpn_targets[3:]
-        rcnn_miss_gt_num, rcnn_miss_gt_num_as, gt_min_max_iou, pos_roi_num, roi_num = detect_targets[3:]
+        rcnn_miss_gt_num, rcnn_miss_gt_num_as, gt_min_max_iou, pos_roi_num, neg_roi_num, roi_num = detect_targets[3:]
         gt_num = Lambda(lambda x: tf.identity(x), name='identity_gt_num')(gt_num)
         positive_num = Lambda(lambda x: tf.identity(x), name='identity_positive_num')(positive_num)
         negative_num = Lambda(lambda x: tf.identity(x), name='identity_negative_num')(negative_num)
@@ -151,13 +151,14 @@ def frcnn(config, stage='train'):
         rcnn_miss_gt_num_as = Lambda(lambda x: tf.identity(x), name='identity_rcnn_miss_gt_num_as')(rcnn_miss_gt_num_as)
         gt_min_max_iou = Lambda(lambda x: tf.identity(x), name='identity_gt_min_max_iou')(gt_min_max_iou)
         pos_roi_num = Lambda(lambda x: tf.identity(x), name='identity_pos_roi_num')(pos_roi_num)
+        neg_roi_num = Lambda(lambda x: tf.identity(x), name='identity_neg_roi_num')(neg_roi_num)
         roi_num = Lambda(lambda x: tf.identity(x), name='identity_roi_num')(roi_num)
 
         # 构建模型
         model = Model(inputs=[input_image, input_image_meta, gt_class_ids, gt_boxes],
                       outputs=[cls_loss_rpn, regress_loss_rpn, regress_loss_rcnn, cls_loss_rcnn] + [
                           gt_num, positive_num, negative_num, rpn_miss_gt_num, rpn_gt_min_max_iou, roi_num,
-                          pos_roi_num, rcnn_miss_gt_num, rcnn_miss_gt_num_as,
+                          pos_roi_num, neg_roi_num, rcnn_miss_gt_num, rcnn_miss_gt_num_as,
                           gt_min_max_iou])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
         if config.GPU_COUNT > 1:
