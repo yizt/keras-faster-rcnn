@@ -148,9 +148,12 @@ class VOCResnetConfig(VOCConfig):
     IMAGES_PER_GPU = 2
     IMAGE_MAX_DIM = 720
     LEARNING_RATE = 0.003
-    TRAIN_LAYERS = r"(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)"
-    # TRAIN_LAYERS = r"(bn5.*)|(res3.*)|(res4.*)|(res5.*)|(rcnn\_.*)|(rpn\_.*)"
-    # RPN_TRAIN_ANCHORS_PER_IMAGE = 80
+    RPN_NMS_THRESHOLD_TRAINING = 0.9
+    RPN_NMS_THRESHOLD_INFERENCE = 0.9
+    # TRAIN_LAYERS = r"(res3.*)|(bn3.*)|(res4.*)|(bn4.*)|(res5.*)|(bn5.*)|(rcnn\_.*)|(rpn\_.*)"
+    TRAIN_LAYERS = r"(res3.*)|(res4.*)|(res5.*)|(rcnn\_.*)|(rpn\_.*)"
+    # TRAIN_LAYERS = r".*"
+    RPN_TRAIN_ANCHORS_PER_IMAGE = 80
     POOL_SIZE = (14, 14)
 
     # RPN_ANCHOR_HEIGHTS = [76.01, 137.64, 210.27, 249.25, 350.94, 386.97, 546.33, 631.71, 707.87]
