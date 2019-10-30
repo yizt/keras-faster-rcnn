@@ -7,7 +7,7 @@ Created on 2019/04/12 下午9:42
 模型工具类
 
 """
-import keras
+import tensorflow.python.keras as keras
 import tensorflow as tf
 
 

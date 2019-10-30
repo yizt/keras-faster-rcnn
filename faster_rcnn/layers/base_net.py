@@ -6,8 +6,9 @@ Created on 2019/3/24 下午9:51
 @author: mick.yi
 
 """
-from keras import layers, backend, Model
-from keras.layers import TimeDistributed, Conv2D
+from tensorflow.python.keras import layers, backend
+
+from tensorflow.python.keras.layers import TimeDistributed, Conv2D
 from faster_rcnn.layers.batch_norm import BatchNorm
 
 

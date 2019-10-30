@@ -8,10 +8,11 @@ frcnn模型
 
 """
 import re
-from keras import layers, backend
-from keras.models import Model
-from keras.layers import Input, Lambda, Conv2D, Reshape, TimeDistributed
 import tensorflow as tf
+
+from tensorflow.python.keras import layers, backend
+from tensorflow.python.keras.models import Model
+from tensorflow.python.keras.layers import Input, Lambda, Conv2D, Reshape, TimeDistributed
 from faster_rcnn.layers.anchors import Anchor
 from faster_rcnn.layers.target import RpnTarget, DetectTarget
 from faster_rcnn.layers.proposals import RpnToProposal

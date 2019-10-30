@@ -5,7 +5,7 @@
    Author :       mick.yi
    date：          2019/2/1
 """
-import keras
+import tensorflow.python.keras as keras
 import tensorflow as tf
 from faster_rcnn.utils import tf_utils
 

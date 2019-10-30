@@ -5,7 +5,7 @@
    Author :       mick.yi
    date：          2019/2/14
 """
-import keras
+import tensorflow.python.keras as keras
 import tensorflow as tf
 from faster_rcnn.utils.tf_utils import apply_regress, pad_to_fixed_size
 

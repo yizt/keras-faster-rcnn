@@ -5,7 +5,7 @@
    Author :       mick.yi
    date：          2019/2/1
 """
-from keras import layers
+from tensorflow.python.keras import layers
 import tensorflow as tf
 
 

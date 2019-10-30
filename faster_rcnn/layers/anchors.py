@@ -9,7 +9,7 @@ anchor层，生成anchors
 """
 
 import tensorflow as tf
-import keras
+import tensorflow.python.keras as keras
 import numpy as np
 
 

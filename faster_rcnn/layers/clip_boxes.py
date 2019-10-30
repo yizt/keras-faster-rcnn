@@ -6,7 +6,7 @@
    date：          2019/3/5
 """
 
-import keras
+import tensorflow.python.keras as keras
 import tensorflow as tf
 from ..utils import tf_utils
 

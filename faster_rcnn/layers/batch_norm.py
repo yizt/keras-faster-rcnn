@@ -5,7 +5,7 @@
    Author :       mick.yi
    Date：          2019/4/26
 """
-from keras import layers
+from tensorflow.python.keras import layers
 
 
 class BatchNorm(layers.BatchNormalization):

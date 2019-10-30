@@ -7,7 +7,7 @@ Created on 2018/12/2 下午3:43
 分类回归目标层，包括rpn_target和detect_target
 
 """
-import keras
+import tensorflow.python.keras as keras
 import tensorflow as tf
 from faster_rcnn.utils import tf_utils
 

@@ -6,7 +6,7 @@
    date：          2019/2/14
 """
 import tensorflow as tf
-from keras import backend
+from tensorflow.python.keras import backend
 
 
 def deal_delta(deltas, class_logits):

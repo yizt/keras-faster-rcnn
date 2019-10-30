@@ -14,12 +14,12 @@ https://github.com/fchollet/keras/blob/master/keras/utils/training_utils.py
 """
 
 import tensorflow as tf
-import keras.backend as K
-import keras.layers as KL
-import keras.models as KM
+import tensorflow.python.keras.backend as K
+import tensorflow.python.keras.layers as KL
+import tensorflow.python.keras.models as KM
 
 
-def make_parallel(keras_model, gpu_count):
+def make_parallel(keras_model, gpu_list):
     """Creates a new wrapper model that consists of multiple replicas of
     the original model placed on different GPUs.
     Args:
@@ -30,7 +30,7 @@ def make_parallel(keras_model, gpu_count):
     """
     # Slice inputs. Slice inputs on the CPU to avoid sending a copy
     # of the full inputs to all GPUs. Saves on bandwidth and memory.
-    input_slices = {name: tf.split(x, gpu_count)
+    input_slices = {name: tf.split(x, len(gpu_list))
                     for name, x in zip(keras_model.input_names,
                                        keras_model.inputs)}
 
@@ -40,7 +40,7 @@ def make_parallel(keras_model, gpu_count):
         outputs_all.append([])
 
     # Run the model call() on each GPU to place the ops there
-    for i in range(gpu_count):
+    for i in gpu_list:
         with tf.device('/gpu:%d' % i):
             with tf.name_scope('tower_%d' % i):
                 # Run a slice of inputs through this replica
@@ -120,9 +120,9 @@ if __name__ == "__main__":
 
     import os
     import numpy as np
-    import keras.optimizers
-    from keras.datasets import mnist
-    from keras.preprocessing.image import ImageDataGenerator
+    import tensorflow.python.keras.optimizers
+    from tensorflow.python.keras.datasets import mnist
+    from tensorflow.python.keras.preprocessing.image import ImageDataGenerator
 
     GPU_COUNT = 2
 

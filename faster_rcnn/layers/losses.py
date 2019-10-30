@@ -6,7 +6,7 @@ Created on 2018/12/4 10:46
 损失函数层
 """
 import tensorflow as tf
-import keras.backend as K
+import tensorflow.python.keras.backend as K
 
 
 def rpn_cls_loss(predict_cls_ids, true_cls_ids, indices):
@@ -102,6 +102,7 @@ def detect_cls_loss(predict_cls_ids, true_cls_ids):
 
     # 交叉熵损失函数
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_cls_ids, logits=predict_cls_ids)
+    tf.nn.sigmoid_cross_entropy_with_logits
     loss = K.mean(loss)
     return loss
 

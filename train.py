@@ -12,17 +12,17 @@ import argparse
 import sys
 import os
 import tensorflow as tf
-import keras
+import tensorflow.python.keras as keras
 from faster_rcnn.config import current_config as config
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.utils.generator import Generator
 from faster_rcnn.layers import models
 from faster_rcnn.utils import model_utils
-from keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
+from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
 
 
 def set_gpu_growth(gpu_count):
-    os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(i) for i in range(gpu_count)])
+    # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(i) for i in range(gpu_count)])
     cfg = tf.ConfigProto(allow_soft_placement=True)  # because no supported kernel for GPU devices is available
     cfg.gpu_options.allow_growth = True
     session = tf.Session(config=cfg)
