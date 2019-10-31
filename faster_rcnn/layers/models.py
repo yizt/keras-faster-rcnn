@@ -76,10 +76,11 @@ def rpn_net(config, stage='train'):
 def frcnn(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
     # 输入
-    input_image = Input(shape=config.IMAGE_INPUT_SHAPE, name='input_image')
-    input_image_meta = Input(shape=(12,), name='input_image_meta')
-    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1), name='input_gt_class_ids')
-    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), name='input_gt_boxes')
+    input_image = Input(shape=config.IMAGE_INPUT_SHAPE, batch_size=config.BATCH_SIZE, name='input_image')
+    input_image_meta = Input(shape=(12,), batch_size=config.BATCH_SIZE, name='input_image_meta')
+    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1), batch_size=config.BATCH_SIZE,
+                         name='input_gt_class_ids')
+    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), batch_size=config.BATCH_SIZE, name='input_gt_boxes')
 
     # 特征及预测结果
     features = config.base_fn(input_image)
@@ -129,7 +130,6 @@ def frcnn(config, stage='train'):
                                       config.ROI_POSITIVE_RATIO,
                                       name='rcnn_target')([gt_boxes, gt_class_ids, proposal_boxes])
         roi_deltas, roi_class_ids, train_rois = detect_targets[:3]
-
         # 检测网络
         rcnn_deltas, rcnn_class_logits = rcnn(features, train_rois, config.NUM_CLASSES, config.IMAGE_MAX_DIM,
                                               config.head_fn, pool_size=config.POOL_SIZE,
@@ -215,7 +215,7 @@ def rcnn(base_layers, rois, num_classes, image_max_dim, head_fn, pool_size=(7, 7
         shared_layer)  # shape (batch_size,roi_num,4*num_classes)
 
     # 变为(batch_size,roi_num,num_classes,4)
-    roi_num = backend.int_shape(deltas)[1]
+    roi_num = backend.int_shape(deltas)[1]  # print("roi_num:{}".format(roi_num))
     deltas = layers.Reshape((roi_num, num_classes, 4))(deltas)
 
     return deltas, class_logits

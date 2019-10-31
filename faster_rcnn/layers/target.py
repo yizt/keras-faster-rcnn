@@ -310,6 +310,7 @@ def detect_targets_graph(gt_boxes, gt_class_ids, proposals, train_rois_per_image
     miss_gt_num = gt_num - match_gt_num
     miss_gt_num_shuffle = gt_num - match_gt_num_after_shuffle  # shuffle后未分配roi的GT
     gt_min_max_iou = tf.reduce_min(tf.reduce_max(iou, axis=1))  # gt 匹配最小最大值
+    train_rois.set_shape([train_rois_per_image, 5])
     return [deltas, class_ids, train_rois,
             tf_utils.scalar_to_1d_tensor(miss_gt_num),
             tf_utils.scalar_to_1d_tensor(miss_gt_num_shuffle),
