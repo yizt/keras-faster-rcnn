@@ -24,7 +24,7 @@ def make_parallel(keras_model, gpu_list):
     the original model placed on different GPUs.
     Args:
         keras_model: the input model to replicate on multiple gpus
-        gpu_count: the number of replicas to build
+        gpu_list: the number of replicas to build
     Returns:
         Multi-gpu model
     """
@@ -86,13 +86,13 @@ class ParallelModel(KM.Model):
     outputs.
     """
 
-    def __init__(self, keras_model, gpu_count):
+    def __init__(self, keras_model, gpu_list):
         """Class constructor.
         keras_model: The Keras model to parallelize
-        gpu_count: Number of GPUs. Must be > 1
+        gpu_list: gpu_id in CUDA_VISIBLE_DEVICES
         """
         merged_outputs = make_parallel(
-            keras_model=keras_model, gpu_count=gpu_count)
+            keras_model=keras_model, gpu_list=gpu_list)
         super(ParallelModel, self).__init__(inputs=keras_model.inputs,
                                             outputs=merged_outputs)
         self.inner_model = keras_model
