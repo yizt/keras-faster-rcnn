@@ -64,11 +64,11 @@ def compile(keras_model, lr, momentum, clipnorm, weight_decay, loss_names=[], lo
                 tf.reduce_mean(layer.output, keepdims=True)
                 * loss_weights.get(name, 1.))
         # keras_model.metrics.append(loss)
-        keras_model.add_metric(loss, name=name)
+        keras_model.add_metric(loss, aggregation='mean', name=name)
     # 正则化增加度量
     # keras_model.metrics_names.append('regular_loss')
     # keras_model.metrics.append(tf.add_n(reg_losses))
-    keras_model.add_metric(tf.add_n(reg_losses), name='regular_loss')
+    keras_model.add_metric(tf.add_n(reg_losses), aggregation='mean', name='regular_loss')
 
 
 def add_metrics(keras_model, metric_name_list, metric_tensor_list):
