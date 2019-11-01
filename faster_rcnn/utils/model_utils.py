@@ -59,14 +59,16 @@ def compile(keras_model, lr, momentum, clipnorm, weight_decay, loss_names=[], lo
         layer = keras_model.get_layer(name)
         if layer is None:
             continue
-        keras_model.metrics_names.append(name)
+        # keras_model.metrics_names.append(name)
         loss = (
                 tf.reduce_mean(layer.output, keepdims=True)
                 * loss_weights.get(name, 1.))
-        keras_model.metrics.append(loss)
+        # keras_model.metrics.append(loss)
+        keras_model.add_metric(loss, name=name)
     # 正则化增加度量
-    keras_model.metrics_names.append('regular_loss')
-    keras_model.metrics.append(tf.add_n(reg_losses))
+    # keras_model.metrics_names.append('regular_loss')
+    # keras_model.metrics.append(tf.add_n(reg_losses))
+    keras_model.add_metric(tf.add_n(reg_losses), name='regular_loss')
 
 
 def add_metrics(keras_model, metric_name_list, metric_tensor_list):
@@ -78,5 +80,6 @@ def add_metrics(keras_model, metric_name_list, metric_tensor_list):
     :return: 无
     """
     for name, tensor in zip(metric_name_list, metric_tensor_list):
-        keras_model.metrics_names.append(name)
-        keras_model.metrics.append(tf.reduce_mean(tensor, keep_dims=False))
+        # keras_model.metrics_names.append(name)
+        # keras_model.metrics.append(tf.reduce_mean(tensor, keepdims=False))
+        keras_model.add_metric(tensor, aggregation='mean', name=name)
