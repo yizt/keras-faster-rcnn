@@ -21,8 +21,10 @@ from faster_rcnn.utils import model_utils
 from tensorflow.python.keras.callbacks import TensorBoard, ModelCheckpoint, LearningRateScheduler
 
 
-def set_gpu_growth(gpu_count):
+def set_gpu_growth():
     # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(i) for i in range(gpu_count)])
+    config.GPU_LIST = os.environ["CUDA_VISIBLE_DEVICES"].split(',')
+    config.GPU_COUNT = len(config.GPU_LIST)
     cfg = tf.ConfigProto(allow_soft_placement=True)  # because no supported kernel for GPU devices is available
     cfg.gpu_options.allow_growth = True
     session = tf.Session(config=cfg)
@@ -57,7 +59,7 @@ def get_call_back():
 
 
 def main(args):
-    set_gpu_growth(config.GPU_COUNT)
+    set_gpu_growth()
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     train_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'trainval']  # 训练集
@@ -70,7 +72,8 @@ def main(args):
     if args.init_epochs > 0:
         m.load_weights('/tmp/frcnn-{}.{:03d}.h5'.format(config.BASE_NET_NAME, init_epochs), by_name=True)
     else:
-        m.load_weights(config.pretrained_weights, by_name=True)
+        # m.load_weights(config.pretrained_weights, by_name=True)
+        pass
     # 生成器
     train_gen = Generator(train_img_info,
                           config.IMAGE_INPUT_SHAPE,
@@ -98,14 +101,15 @@ def main(args):
     model_utils.add_metrics(m, metric_names, m.outputs[-11:])
 
     # 训练
-    m.fit_generator(train_gen.gen(),
+    m.fit_generator(train_gen,
                     epochs=args.epochs,
-                    steps_per_epoch=len(train_img_info) // config.BATCH_SIZE,
+                    steps_per_epoch=len(train_gen),
                     verbose=1,
                     initial_epoch=init_epochs,
-                    validation_data=val_gen.gen(),
-                    validation_steps=len(test_img_info) // config.BATCH_SIZE,
-                    use_multiprocessing=True,
+                    validation_data=val_gen,
+                    validation_steps=len(val_gen),
+                    use_multiprocessing=False,
+                    workers=1,
                     callbacks=get_call_back())
 
 
@@ -113,5 +117,5 @@ if __name__ == '__main__':
     parse = argparse.ArgumentParser()
     parse.add_argument("--epochs", type=int, default=80, help="epochs")
     parse.add_argument("--init_epochs", type=int, default=0, help="init_epochs")
-    argments = parse.parse_args(sys.argv[1:])
-    main(argments)
+    arguments = parse.parse_args(sys.argv[1:])
+    main(arguments)

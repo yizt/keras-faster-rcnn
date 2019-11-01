@@ -8,6 +8,7 @@
 import numpy as np
 import random
 from faster_rcnn.utils import np_utils, image as image_utils
+from tensorflow.python import keras
 
 
 def image_flip(image, gt_boxes):
@@ -46,7 +47,7 @@ def image_crop(image, gt_boxes):
     return image, gt_boxes
 
 
-class Generator(object):
+class Generator(keras.utils.data_utils.Sequence):
     def __init__(self, annotation_list, input_shape, mean_pixel, batch_size=1, max_gt_num=50,
                  horizontal_flip=False, random_crop=False,
                  **kwargs):
@@ -71,54 +72,57 @@ class Generator(object):
         self.size = len(annotation_list)
         super(Generator, self).__init__(**kwargs)
 
-    def gen(self):
-        while True:
-            # 一个epoch重新打乱
-            np.random.shuffle(self.annotation_list)
-            for n in range(self.size // self.batch_size):
-                images = np.zeros((self.batch_size,) + self.input_shape, dtype=np.float32)
-                image_metas = np.zeros((self.batch_size, 12), dtype=np.float32)
-                batch_gt_boxes = np.zeros((self.batch_size, self.max_gt_num, 5), dtype=np.float32)
-                batch_gt_class_ids = np.ones((self.batch_size, self.max_gt_num, 2), dtype=np.uint8)
-                # 随机选择
-                indices = np.random.choice(self.size, self.batch_size, replace=False)
-                for i, index in enumerate(indices):
-                    # 加载图像
-                    image = image_utils.load_image(self.annotation_list[index]['filepath'])
-                    # 数据增广:水平翻转、随机裁剪
-                    gt_boxes = self.annotation_list[index]['boxes'].copy()  # 不改变原来的
-                    if self.horizontal_flip and random.random() > 0.5:
-                        image, gt_boxes = image_flip(image, gt_boxes)
-                    if self.random_crop and random.random() > 0.5:
-                        image, gt_boxes = image_crop(image, gt_boxes)
+    def on_epoch_end(self):
+        # 一个epoch重新打乱
+        np.random.shuffle(self.annotation_list)
 
-                    # resize图像
-                    images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
-                                                                                          self.input_shape[0],
-                                                                                          gt_boxes)
-                    # pad gt到固定个数
-                    batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
-                    batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
-                        np.expand_dims(self.annotation_list[index]['labels'], axis=1),
-                        self.max_gt_num)
-                images = np.asarray(images, np.float32) - self.mean_pixel  # 减去均值
-                yield {"input_image": images,
-                       "input_image_meta": image_metas,
-                       "input_gt_boxes": batch_gt_boxes,
-                       "input_gt_class_ids": batch_gt_class_ids}, None
+    def __len__(self):
+        return self.size // self.batch_size
 
-    def gen_val(self):
-        """
-        评估生成器
-        :return:
-        """
-        for idx, image_info in enumerate(self.annotation_list):
+    def __getitem__(self, index):
+        indices = np.arange(index * self.batch_size, (index + 1) * self.batch_size)
+        images = np.zeros((self.batch_size,) + self.input_shape, dtype=np.float32)
+        image_metas = np.zeros((self.batch_size, 12), dtype=np.float32)
+        batch_gt_boxes = np.zeros((self.batch_size, self.max_gt_num, 5), dtype=np.float32)
+        batch_gt_class_ids = np.ones((self.batch_size, self.max_gt_num, 2), dtype=np.uint8)
+        for i, index in enumerate(indices):
             # 加载图像
-            image = image_utils.load_image(self.annotation_list[idx]['filepath'])
-            image, image_meta, _ = image_utils.resize_image_and_gt(image,
-                                                                   self.input_shape[0])
-            image = np.asarray(image, np.float32) - self.mean_pixel  # 减去均值
-            if idx % 200 == 0:
-                print("开始预测:{}张图像".format(idx))
-            yield {"input_image": np.asarray([image]),
-                   "input_image_meta": np.asarray([image_meta])}
+            image = image_utils.load_image(self.annotation_list[index]['filepath'])
+            # 数据增广:水平翻转、随机裁剪
+            gt_boxes = self.annotation_list[index]['boxes'].copy()  # 不改变原来的
+            if self.horizontal_flip and random.random() > 0.5:
+                image, gt_boxes = image_flip(image, gt_boxes)
+            if self.random_crop and random.random() > 0.5:
+                image, gt_boxes = image_crop(image, gt_boxes)
+
+            # resize图像
+            images[i], image_metas[i], gt_boxes = image_utils.resize_image_and_gt(image,
+                                                                                  self.input_shape[0],
+                                                                                  gt_boxes)
+            # pad gt到固定个数
+            batch_gt_boxes[i] = np_utils.pad_to_fixed_size(gt_boxes, self.max_gt_num)
+            batch_gt_class_ids[i] = np_utils.pad_to_fixed_size(
+                np.expand_dims(self.annotation_list[index]['labels'], axis=1),
+                self.max_gt_num)
+        images = np.asarray(images, np.float32) - self.mean_pixel  # 减去均值
+
+        return {"input_image": images,
+                "input_image_meta": image_metas,
+                "input_gt_boxes": batch_gt_boxes,
+                "input_gt_class_ids": batch_gt_class_ids}, None
+
+
+class TestGenerator(Generator):
+    def on_epoch_end(self):
+        pass
+
+    def __getitem__(self, index):
+        # 加载图像
+        image = image_utils.load_image(self.annotation_list[index]['filepath'])
+        image, image_meta, _ = image_utils.resize_image_and_gt(image,
+                                                               self.input_shape[0])
+        image = np.asarray(image, np.float32) - self.mean_pixel  # 减去均值
+        if index % 200 == 0:
+            print("开始预测:{}张图像".format(index))
+        return {"input_image": np.asarray([image]),
+                "input_image_meta": np.asarray([image_meta])}
