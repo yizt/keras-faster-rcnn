@@ -10,7 +10,7 @@ class Config(object):
     # 输入图像大小
     IMAGE_MAX_DIM = 608
     # 最大GT个数
-    MAX_GT_INSTANCES = 50
+    MAX_GT_INSTANCES = 100
     # ####网络参数######
     # 网络步长
     BACKBONE_STRIDE = 16
@@ -58,6 +58,7 @@ class Config(object):
 
     # ####训练参数#######
     GPU_COUNT = 1
+    GPU_LIST = ['0']
     IMAGES_PER_GPU = 2
     LEARNING_RATE = 0.001
     LEARNING_MOMENTUM = 0.9
@@ -81,7 +82,7 @@ class Config(object):
     INFERENCE_GPU_ID = '1'  # 预测的gpu id
 
     def __init__(self):
-        self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT  # batch_size是GPU数乘每个gpu处理图片数
+        # self.BATCH_SIZE = self.IMAGES_PER_GPU * self.GPU_COUNT  # batch_size是GPU数乘每个gpu处理图片数
         self.IMAGE_INPUT_SHAPE = (self.IMAGE_MAX_DIM, self.IMAGE_MAX_DIM, 3)
         # 如果知道长宽就用指定的，没有指定就使用尺寸个数乘缩放比个数
         self.RPN_ANCHOR_NUM = len(self.RPN_ANCHOR_HEIGHTS) if self.RPN_ANCHOR_HEIGHTS is not None \
@@ -121,7 +122,7 @@ class VOCConfig(Config):
                      'motorbike': 19,
                      'aeroplane': 20
                      }
-    voc_path = '/opt/dataset/VOCdevkit'
+    voc_path = '/sdb/tmp/open_dataset/VOCdevkit'
     pretrained_weights = None
 
 
@@ -144,8 +145,7 @@ class VOCVggConfig(VOCConfig):
 class VOCResnetConfig(VOCConfig):
     NAME = "voc"
     BASE_NET_NAME = 'resnet50'
-    GPU_COUNT = 2
-    IMAGES_PER_GPU = 2
+    IMAGES_PER_GPU = 4
     IMAGE_MAX_DIM = 720
     LEARNING_RATE = 0.003
     RPN_NMS_THRESHOLD_TRAINING = 0.9
@@ -172,7 +172,7 @@ class VOCResnetConfig(VOCConfig):
     def head_fn(self, *args, **kwargs):
         return resnet50_head(*args, **kwargs)
 
-    pretrained_weights = '/opt/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
+    pretrained_weights = '/sdb/tmp/pretrained_model/resnet50_weights_tf_dim_ordering_tf_kernels_notop.h5'
 
 
 class LocalVOCConfig(VOCConfig):

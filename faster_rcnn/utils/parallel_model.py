@@ -30,6 +30,7 @@ def make_parallel(keras_model, gpu_list):
     """
     # Slice inputs. Slice inputs on the CPU to avoid sending a copy
     # of the full inputs to all GPUs. Saves on bandwidth and memory.
+    gpu_list = [int(i) for i in gpu_list]
     input_slices = {name: tf.split(x, len(gpu_list))
                     for name, x in zip(keras_model.input_names,
                                        keras_model.inputs)}
@@ -47,7 +48,7 @@ def make_parallel(keras_model, gpu_list):
                 zipped_inputs = zip(keras_model.input_names,
                                     keras_model.inputs)
                 inputs = [
-                    KL.Lambda(lambda s: input_slices[name][i],
+                    KL.Lambda(lambda s: input_slices[name][gpu_list.index(i)],
                               output_shape=lambda s: (None,) + s[1:])(tensor)
                     for name, tensor in zipped_inputs]
                 # Create the model replica and get the outputs

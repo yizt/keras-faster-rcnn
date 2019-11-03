@@ -25,6 +25,7 @@ def set_gpu_growth():
     # os.environ["CUDA_VISIBLE_DEVICES"] = ",".join([str(i) for i in range(gpu_count)])
     config.GPU_LIST = os.environ["CUDA_VISIBLE_DEVICES"].split(',')
     config.GPU_COUNT = len(config.GPU_LIST)
+    config.BATCH_SIZE = config.IMAGES_PER_GPU * config.GPU_COUNT
     cfg = tf.ConfigProto(allow_soft_placement=True)  # because no supported kernel for GPU devices is available
     cfg.gpu_options.allow_growth = True
     session = tf.Session(config=cfg)
@@ -46,7 +47,7 @@ def get_call_back():
     :return:
     """
     checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + config.BASE_NET_NAME + '.{epoch:03d}.h5',
-                                 monitor='val_loss',
+                                 monitor='train_loss',
                                  verbose=1,
                                  save_best_only=True,
                                  save_weights_only=True,
@@ -66,14 +67,20 @@ def main(args):
     print("train_img_info:{}".format(len(train_img_info)))
     test_img_info = [info for info in dataset.get_image_info_list() if info['type'] == 'test']  # 测试集
     print("test_img_info:{}".format(len(test_img_info)))
-    m = models.frcnn(config, stage='train')
+
+    if config.GPU_COUNT > 1:
+        with tf.device('/cpu:0'):
+            m = models.frcnn(config, stage='train')
+        m = keras.utils.multi_gpu_model(m, gpus=config.GPU_COUNT)
+    else:
+        m = models.frcnn(config, stage='train')
+
     # 加载预训练模型
     init_epochs = args.init_epochs
     if args.init_epochs > 0:
         m.load_weights('/tmp/frcnn-{}.{:03d}.h5'.format(config.BASE_NET_NAME, init_epochs), by_name=True)
     else:
-        # m.load_weights(config.pretrained_weights, by_name=True)
-        pass
+        m.load_weights(config.pretrained_weights, by_name=True)
     # 生成器
     train_gen = Generator(train_img_info,
                           config.IMAGE_INPUT_SHAPE,
@@ -83,7 +90,7 @@ def main(args):
                           horizontal_flip=config.USE_HORIZONTAL_FLIP,
                           random_crop=config.USE_RANDOM_CROP)
     # 生成器
-    val_gen = Generator(test_img_info,
+    val_gen = Generator(test_img_info[:500],
                         config.IMAGE_INPUT_SHAPE,
                         config.MEAN_PIXEL,
                         config.BATCH_SIZE,
@@ -109,7 +116,7 @@ def main(args):
                     validation_data=val_gen,
                     validation_steps=len(val_gen),
                     use_multiprocessing=False,
-                    workers=1,
+                    workers=10,
                     callbacks=get_call_back())
 
 

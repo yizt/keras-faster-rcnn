@@ -10,7 +10,7 @@ import tensorflow as tf
 from deprecated import deprecated
 
 
-@deprecated(reason='建议使用原生tf.map_fn;效率更高,并且不需要显示传入batch_size参数')
+# @deprecated(reason='建议使用原生tf.map_fn;效率更高,并且不需要显示传入batch_size参数')
 def batch_slice(inputs, graph_fn, batch_size, names=None):
     """
     将输入分片，然后每个分片执行指定计算，最后组合结果;适用于批量处理计算图逻辑只支持一个实例的情况

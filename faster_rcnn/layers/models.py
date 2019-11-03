@@ -76,11 +76,11 @@ def rpn_net(config, stage='train'):
 def frcnn(config, stage='train'):
     batch_size = config.IMAGES_PER_GPU
     # 输入
-    input_image = Input(shape=config.IMAGE_INPUT_SHAPE, batch_size=config.BATCH_SIZE, name='input_image')
-    input_image_meta = Input(shape=(12,), batch_size=config.BATCH_SIZE, name='input_image_meta')
-    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1), batch_size=config.BATCH_SIZE,
+    input_image = Input(shape=config.IMAGE_INPUT_SHAPE, name='input_image')
+    input_image_meta = Input(shape=(12,), name='input_image_meta')
+    gt_class_ids = Input(shape=(config.MAX_GT_INSTANCES, 1 + 1),
                          name='input_gt_class_ids')
-    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), batch_size=config.BATCH_SIZE, name='input_gt_boxes')
+    gt_boxes = Input(shape=(config.MAX_GT_INSTANCES, 4 + 1), name='input_gt_boxes')
 
     # 特征及预测结果
     features = config.base_fn(input_image)
@@ -162,8 +162,8 @@ def frcnn(config, stage='train'):
                           pos_roi_num, neg_roi_num, rcnn_miss_gt_num, rcnn_miss_gt_num_as,
                           gt_min_max_iou])  # 在并行model中所有自定义度量必须在output中
         # 多gpu训练
-        if config.GPU_COUNT > 1:
-            model = ParallelModel(model, config.GPU_COUNT)
+        # if config.GPU_COUNT > 1:
+        #     model = ParallelModel(model, config.GPU_LIST)
         return model
     else:  # 测试阶段
         # 检测网络
