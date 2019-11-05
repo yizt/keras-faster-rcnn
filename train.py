@@ -47,11 +47,11 @@ def get_call_back():
     :return:
     """
     checkpoint = ModelCheckpoint(filepath='/tmp/frcnn-' + config.BASE_NET_NAME + '.{epoch:03d}.h5',
-                                 monitor='train_loss',
+                                 monitor='val_loss',
                                  verbose=1,
-                                 save_best_only=True,
+                                 save_best_only=False,
                                  save_weights_only=True,
-                                 period=5)
+                                 save_freq='epoch')
 
     scheduler = LearningRateScheduler(lr_schedule)
 
