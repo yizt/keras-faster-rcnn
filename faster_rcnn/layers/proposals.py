@@ -83,8 +83,12 @@ def nms(boxes, scores, class_logits, anchors_tag, scale,
     output_boxes = tf.gather(boxes, indices)  # (M,4)
     class_scores = tf.expand_dims(tf.gather(scores, indices), axis=1)  # 扩展到二维(M,1)
     class_logits = tf.gather(class_logits, indices)
+
+    # 明确设置维度
+    output_boxes = tf_utils.pad_to_fixed_size(output_boxes, max_output_size)
+    output_boxes.set_shape([max_output_size, 5])
     # padding到固定大小
-    return [tf_utils.pad_to_fixed_size(output_boxes, max_output_size),
+    return [output_boxes,
             tf_utils.pad_to_fixed_size(class_scores, max_output_size),
             tf_utils.pad_to_fixed_size(class_logits, max_output_size)]
 

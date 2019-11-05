@@ -7,31 +7,37 @@
 """
 import argparse
 import sys
-import os
 import time
 import numpy as np
 from faster_rcnn.preprocess.input import VocDataset
 from faster_rcnn.config import current_config as config
 from faster_rcnn.utils import np_utils, image as image_utils, eval_utils
 from faster_rcnn.layers import models
-from faster_rcnn.utils.generator import Generator
+from faster_rcnn.utils.generator import TestGenerator
 
 
 def main(args):
-    os.environ["CUDA_VISIBLE_DEVICES"] = config.INFERENCE_GPU_ID
+    from tensorflow.python.keras import backend as K
+    import tensorflow as tf
+
+    cfg = tf.ConfigProto()
+    cfg.gpu_options.allow_growth = True
+    session = tf.Session(config=cfg)
+    K.set_session(session)
     # 覆盖参数
     config.IMAGES_PER_GPU = 1
     config.GPU_COUNT = 1
     config.DETECTION_MIN_CONFIDENCE = 0.0  # 评估阶段保证有足够的边框输出
+
     # 加载数据集
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     print("len:{}".format(len(dataset.get_image_info_list())))
     test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == args.data_set]
     print("len:{}".format(len(test_image_info_list)))
-    gen = Generator(test_image_info_list,
-                    config.IMAGE_INPUT_SHAPE,
-                    config.MEAN_PIXEL)
+    gen = TestGenerator(test_image_info_list,
+                        config.IMAGE_INPUT_SHAPE,
+                        config.MEAN_PIXEL)
     # 加载模型
     m = models.frcnn(config, stage='test')
     if args.weight_path is not None:
@@ -42,8 +48,10 @@ def main(args):
     # 预测边框、得分、类别
     s_time = time.time()
     boxes, scores, class_ids, _, image_metas = m.predict_generator(
-        gen.gen_val(),
+        gen,
         steps=gen.size,
+        verbose=1,
+        workers=4,
         use_multiprocessing=True)
     print("预测 {} 张图像,耗时：{} 秒".format(len(test_image_info_list), time.time() - s_time))
     # 去除padding
@@ -69,5 +77,5 @@ if __name__ == '__main__':
     parse = argparse.ArgumentParser()
     parse.add_argument("--weight_path", type=str, default=None, help="weight path")
     parse.add_argument("--data_set", type=str, default='test', help="dataset to evaluate")
-    argments = parse.parse_args(sys.argv[1:])
-    main(argments)
+    arguments = parse.parse_args(sys.argv[1:])
+    main(arguments)

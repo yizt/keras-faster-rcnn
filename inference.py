@@ -29,7 +29,6 @@ def class_map_to_id_map(class_mapping):
 
 
 def main(args):
-    os.environ["CUDA_VISIBLE_DEVICES"] = config.INFERENCE_GPU_ID
     # 覆盖参数
     config.IMAGES_PER_GPU = 1
     config.GPU_COUNT = 1
