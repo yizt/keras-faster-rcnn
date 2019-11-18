@@ -102,7 +102,6 @@ def detect_cls_loss(predict_cls_ids, true_cls_ids):
 
     # 交叉熵损失函数
     loss = tf.nn.softmax_cross_entropy_with_logits_v2(labels=true_cls_ids, logits=predict_cls_ids)
-    tf.nn.sigmoid_cross_entropy_with_logits
     loss = K.mean(loss)
     return loss
 
