@@ -33,7 +33,8 @@ def main(args):
     dataset = VocDataset(config.voc_path, class_mapping=config.CLASS_MAPPING)
     dataset.prepare()
     print("len:{}".format(len(dataset.get_image_info_list())))
-    test_image_info_list = [info for info in dataset.get_image_info_list() if info['type'] == args.data_set]
+    test_image_info_list = [info for info in dataset.get_image_info_list()
+                            if info['type'] == args.data_set][:args.eval_num]
     print("len:{}".format(len(test_image_info_list)))
     gen = TestGenerator(test_image_info_list,
                         config.IMAGE_INPUT_SHAPE,
@@ -52,7 +53,7 @@ def main(args):
         steps=gen.size,
         verbose=1,
         workers=4,
-        use_multiprocessing=True)
+        use_multiprocessing=False)
     print("预测 {} 张图像,耗时：{} 秒".format(len(test_image_info_list), time.time() - s_time))
     # 去除padding
     image_metas = image_utils.batch_parse_image_meta(image_metas)
@@ -77,5 +78,6 @@ if __name__ == '__main__':
     parse = argparse.ArgumentParser()
     parse.add_argument("--weight_path", type=str, default=None, help="weight path")
     parse.add_argument("--data_set", type=str, default='test', help="dataset to evaluate")
+    parse.add_argument("--eval_num", type=int, default=1000000, help="number of images to evaluate")
     arguments = parse.parse_args(sys.argv[1:])
     main(arguments)
