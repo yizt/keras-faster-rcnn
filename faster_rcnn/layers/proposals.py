@@ -129,19 +129,25 @@ class RpnToProposal(keras.layers.Layer):
         class_scores = tf.nn.softmax(logits=class_logits, axis=-1)  # [N,num_classes]
         fg_scores = tf.reduce_max(class_scores[..., 1:], axis=-1)  # 第一类为背景 (N,)
 
-        # 应用边框回归
+        # # 应用边框回归
         # proposals = tf.map_fn(lambda x: apply_regress(*x),
         #                       elems=[deltas, anchors],
+        #                       dtype=tf.float32)
+        # # 裁剪边框到图像窗口内
+        # windows = metas[:, 7:11]
+        # proposals = tf.map_fn(lambda x: tf_utils.clip_boxes(*x),
+        #                       elems=[proposals, windows],
         #                       dtype=tf.float32)
         # # 非极大抑制
         # options = {"max_output_size": self.output_box_num,
         #            "iou_threshold": self.iou_threshold,
         #            "score_threshold": self.score_threshold,
         #            "name": "proposals_nms"}
-        #
+        # scales = metas[:, -1]
         # outputs = tf.map_fn(lambda x: nms(*x, **options),
-        #                     elems=[proposals, fg_scores, class_logits],
+        #                     elems=[proposals, fg_scores, class_logits, anchors_tag, scales],
         #                     dtype=[tf.float32] * 3)
+
         # 应用边框回归
         proposals = tf_utils.batch_slice([deltas, anchors],
                                          lambda x, y: apply_regress(x, y),
