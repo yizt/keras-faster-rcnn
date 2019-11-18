@@ -128,8 +128,8 @@ class TestGenerator(Generator):
         for i, index in enumerate(indices):
             # 加载图像
             image = image_utils.load_image(self.annotation_list[index]['filepath'])
-            image, image_meta, _ = image_utils.resize_image_and_gt(image,
-                                                                   self.input_shape[0])
+            images[i], image_metas[i], _ = image_utils.resize_image_and_gt(image,
+                                                                           self.input_shape[0])
             if index % 200 == 0:
                 print("开始预测:{}张图像".format(index))
         images = np.asarray(images, np.float32) - self.mean_pixel  # 减去均值
