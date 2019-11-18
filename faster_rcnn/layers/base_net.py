@@ -9,7 +9,8 @@ Created on 2019/3/24 下午9:51
 from tensorflow.python.keras import layers, backend
 
 from tensorflow.python.keras.layers import TimeDistributed, Conv2D
-from faster_rcnn.layers.batch_norm import BatchNorm
+#from faster_rcnn.layers.batch_norm import BatchNorm
+from tensorflow.python.keras.layers import BatchNormalizationV2 as BatchNorm
 
 
 def resnet50(inputs):
