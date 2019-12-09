@@ -32,9 +32,8 @@ g. 原文中rpn会产生2000个proposals用于rcnn网络训练，但是这里训
 
 ## 依赖
 
-Keras 2.2.4
 
-tensorflow-gpu 1.9.0
+tensorflow-gpu 1.14.0
 
 
 
