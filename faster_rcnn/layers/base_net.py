@@ -6,20 +6,21 @@ Created on 2019/3/24 下午9:51
 @author: mick.yi
 
 """
-from tensorflow.python.keras import layers, backend
-
-from tensorflow.python.keras.layers import TimeDistributed, Conv2D
-#from faster_rcnn.layers.batch_norm import BatchNorm
+from tensorflow.python.keras import layers, backend, regularizers
+# from faster_rcnn.layers.batch_norm import BatchNorm
 from tensorflow.python.keras.layers import BatchNormalizationV2 as BatchNorm
+from tensorflow.python.keras.layers import TimeDistributed
 
 
-def resnet50(inputs):
+def resnet50(inputs, l2_reg=5e-4):
     bn_axis = 3
     #
     x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(inputs)
     x = layers.Conv2D(64, (7, 7),
                       strides=(2, 2),
                       padding='valid',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name='conv1')(x)
     x = BatchNorm(axis=bn_axis, name='bn_conv1')(x)
     x = layers.Activation('relu')(x)
@@ -50,12 +51,13 @@ def resnet50(inputs):
     return x
 
 
-def resnet50_head(features):
+def resnet50_head(features, l2_reg=5e-4):
     filters = 512
     x = features
-    x = conv_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='a', strides=(2, 2))
-    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='b')
-    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='c')
+    x = conv_block_5d(x, 3, [filters, filters, filters * 4],
+                      stage=5, block='a', strides=(2, 2), l2_reg=l2_reg)
+    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='b', l2_reg=l2_reg)
+    x = identity_block_5d(x, 3, [filters, filters, filters * 4], stage=5, block='c', l2_reg=l2_reg)
     # 全局平均池化(batch_size,roi_num,channels)
     x = layers.TimeDistributed(layers.GlobalAvgPool2D())(x)
     return x
@@ -150,7 +152,7 @@ def vgg16_head(features):
     return x
 
 
-def identity_block(input_tensor, kernel_size, filters, stage, block):
+def identity_block(input_tensor, kernel_size, filters, stage, block, l2_reg=5e-4):
     """The identity block is the block that has no conv layer at shortcut.
 
     # Arguments
@@ -174,6 +176,8 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
 
     x = layers.Conv2D(filters1, (1, 1),
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2a')(input_tensor)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
@@ -181,12 +185,16 @@ def identity_block(input_tensor, kernel_size, filters, stage, block):
     x = layers.Conv2D(filters2, kernel_size,
                       padding='same',
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2b')(x)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2c')(x)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2c')(x)
 
@@ -200,7 +208,8 @@ def conv_block(input_tensor,
                filters,
                stage,
                block,
-               strides=(2, 2)):
+               strides=(2, 2),
+               l2_reg=5e-4):
     """A block that has a conv layer at shortcut.
 
     # Arguments
@@ -229,23 +238,31 @@ def conv_block(input_tensor,
 
     x = layers.Conv2D(filters1, (1, 1), strides=strides,
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2a')(input_tensor)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters2, kernel_size, padding='same',
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2b')(x)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.Conv2D(filters3, (1, 1),
                       kernel_initializer='he_normal',
+                      kernel_regularizer=regularizers.l2(l2_reg),
+                      bias_regularizer=regularizers.l2(l2_reg),
                       name=conv_name_base + '2c')(x)
     x = BatchNorm(axis=bn_axis, name=bn_name_base + '2c')(x)
 
     shortcut = layers.Conv2D(filters3, (1, 1), strides=strides,
                              kernel_initializer='he_normal',
+                             kernel_regularizer=regularizers.l2(l2_reg),
+                             bias_regularizer=regularizers.l2(l2_reg),
                              name=conv_name_base + '1')(input_tensor)
     shortcut = BatchNorm(
         axis=bn_axis, name=bn_name_base + '1')(shortcut)
@@ -255,7 +272,7 @@ def conv_block(input_tensor,
     return x
 
 
-def identity_block_5d(input_tensor, kernel_size, filters, stage, block):
+def identity_block_5d(input_tensor, kernel_size, filters, stage, block, l2_reg):
     """The identity block is the block that has no conv layer at shortcut.
 
     # Arguments
@@ -275,6 +292,8 @@ def identity_block_5d(input_tensor, kernel_size, filters, stage, block):
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
     x = layers.TimeDistributed(layers.Conv2D(filters1, (1, 1),
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2a')(input_tensor)
     x = layers.TimeDistributed(BatchNorm(axis=-1), name=bn_name_base + '2a')(x)
@@ -282,12 +301,16 @@ def identity_block_5d(input_tensor, kernel_size, filters, stage, block):
 
     x = layers.TimeDistributed(layers.Conv2D(filters2, kernel_size,
                                              padding='same',
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2b')(x)
     x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1),
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2c')(x)
     x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2c')(x)
@@ -302,7 +325,8 @@ def conv_block_5d(input_tensor,
                   filters,
                   stage,
                   block,
-                  strides=(2, 2)):
+                  strides=(2, 2),
+                  l2_reg=5e-4):
     """A block that has a conv layer at shortcut.
 
     # Arguments
@@ -327,23 +351,31 @@ def conv_block_5d(input_tensor,
     bn_name_base = 'bn' + str(stage) + block + '_branch'
 
     x = layers.TimeDistributed(layers.Conv2D(filters1, (1, 1), strides=strides,
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2a')(input_tensor)
     x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2a')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters2, kernel_size, padding='same',
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2b')(x)
     x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2b')(x)
     x = layers.Activation('relu')(x)
 
     x = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1),
+                                             kernel_regularizer=regularizers.l2(l2_reg),
+                                             bias_regularizer=regularizers.l2(l2_reg),
                                              kernel_initializer='he_normal'),
                                name=conv_name_base + '2c')(x)
     x = layers.TimeDistributed(BatchNorm(axis=bn_axis), name=bn_name_base + '2c')(x)
 
     shortcut = layers.TimeDistributed(layers.Conv2D(filters3, (1, 1), strides=strides,
+                                                    kernel_regularizer=regularizers.l2(l2_reg),
+                                                    bias_regularizer=regularizers.l2(l2_reg),
                                                     kernel_initializer='he_normal'),
                                       name=conv_name_base + '1')(input_tensor)
     shortcut = layers.TimeDistributed(BatchNorm(
