@@ -10,7 +10,7 @@ frcnn模型
 import re
 import tensorflow as tf
 
-from tensorflow.python.keras import layers, backend
+from tensorflow.python.keras import layers, backend, regularizers
 from tensorflow.python.keras.models import Model
 from tensorflow.python.keras.layers import Input, Lambda, Conv2D, Reshape, TimeDistributed
 from faster_rcnn.layers.anchors import Anchor
@@ -189,29 +189,43 @@ def frcnn(config, stage='train'):
                      outputs=[detect_boxes, class_scores, detect_class_ids, detect_class_logits, image_meta])
 
 
-def rpn(base_layers, num_anchors):
-    x = Conv2D(512, (3, 3), padding='same', activation='relu', kernel_initializer='normal', name='rpn_conv')(
+def rpn(base_layers, num_anchors, l2_reg=5e-4):
+    x = Conv2D(512, (3, 3), padding='same', kernel_initializer='he_normal',
+               kernel_regularizer=regularizers.l2(l2_reg),
+               bias_regularizer=regularizers.l2(l2_reg), name='rpn_conv')(
         base_layers)
-    x_class = Conv2D(num_anchors * 2, (1, 1), kernel_initializer='uniform', activation='linear',
+    x = layers.BatchNormalizationV2(axis=-1, name='rpn_bn')(x)
+    x = layers.Activation('relu', name='rpn_relu')(x)
+    x_class = Conv2D(num_anchors * 2, (1, 1), kernel_initializer='he_normal',
+                     kernel_regularizer=regularizers.l2(l2_reg),
+                     bias_regularizer=regularizers.l2(l2_reg), activation='linear',
                      name='rpn_class_logits')(x)
     x_class = Reshape((-1, 2))(x_class)
     x_regr = Conv2D(num_anchors * 4, (1, 1),
-                    kernel_initializer='normal', name='rpn_deltas')(x)
+                    kernel_initializer='he_normal',
+                    kernel_regularizer=regularizers.l2(l2_reg),
+                    bias_regularizer=regularizers.l2(l2_reg), name='rpn_deltas')(x)
     x_regr = Reshape((-1, 4))(x_regr)
     return x_regr, x_class
 
 
-def rcnn(base_layers, rois, num_classes, image_max_dim, head_fn, pool_size=(7, 7), fc_layers_size=1024):
+def rcnn(base_layers, rois, num_classes, image_max_dim, head_fn, pool_size=(7, 7), fc_layers_size=1024, l2_reg=5e-4):
     # RoiAlign
     x = RoiAlign(image_max_dim, pool_size=pool_size)([base_layers, rois])  #
     # 收缩维度
     shared_layer = head_fn(x)
     # 分类
-    class_logits = TimeDistributed(layers.Dense(num_classes, activation='linear'), name='rcnn_class_logits')(
+    class_logits = TimeDistributed(layers.Dense(num_classes, use_bias=False,
+                                                kernel_regularizer=regularizers.l2(l2_reg),
+                                                activation='linear'),
+                                   name='rcnn_class_logits')(
         shared_layer)
 
     # 回归(类别相关)
-    deltas = TimeDistributed(layers.Dense(4 * num_classes, activation='linear'), name='rcnn_deltas')(
+    deltas = TimeDistributed(layers.Dense(4 * num_classes, use_bias=False,
+                                          kernel_regularizer=regularizers.l2(l2_reg),
+                                          activation='linear'),
+                             name='rcnn_deltas')(
         shared_layer)  # shape (batch_size,roi_num,4*num_classes)
 
     # 变为(batch_size,roi_num,num_classes,4)
