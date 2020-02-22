@@ -12,7 +12,7 @@ from tensorflow.python.keras.layers import BatchNormalizationV2 as BatchNorm
 from tensorflow.python.keras.layers import TimeDistributed
 
 
-def resnet50(inputs, l2_reg=5e-4):
+def resnet50(inputs, l2_reg=5e-5):
     bn_axis = 3
     #
     x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(inputs)
@@ -152,7 +152,7 @@ def vgg16_head(features):
     return x
 
 
-def identity_block(input_tensor, kernel_size, filters, stage, block, l2_reg=5e-4):
+def identity_block(input_tensor, kernel_size, filters, stage, block, l2_reg=5e-5):
     """The identity block is the block that has no conv layer at shortcut.
 
     # Arguments
@@ -209,7 +209,7 @@ def conv_block(input_tensor,
                stage,
                block,
                strides=(2, 2),
-               l2_reg=5e-4):
+               l2_reg=5e-5):
     """A block that has a conv layer at shortcut.
 
     # Arguments
